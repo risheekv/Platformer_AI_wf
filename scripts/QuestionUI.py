@@ -8,6 +8,9 @@ import math
 # Add Button import
 from Button import Button
 
+# Import scale factor from config
+from Config import SCALE_FACTOR
+
 class QuestionUI:
     def __init__(self, screen):
         self.screen = screen
@@ -15,8 +18,8 @@ class QuestionUI:
         self.current_question = None
         self.selected_option = None
         self.buttons = []
-        self.font = pygame.font.SysFont('comicsansms', 20)
-        self.title_font = pygame.font.SysFont('comicsansms', 28)
+        self.font = pygame.font.SysFont('comicsansms', int(20 * SCALE_FACTOR))
+        self.title_font = pygame.font.SysFont('comicsansms', int(28 * SCALE_FACTOR))
         self.game_paused = False
         self.question_answered = False
         self.correct_answer = None
@@ -203,13 +206,13 @@ class QuestionUI:
         self.buttons = []
         
         # Button dimensions and spacing
-        button_width = 500
-        button_height = 60
-        spacing = 25
+        button_width = int(500 * SCALE_FACTOR)
+        button_height = int(60 * SCALE_FACTOR)
+        spacing = int(25 * SCALE_FACTOR)
         
         # Calculate starting position to center the buttons
         start_x = (self.screen.get_width() - button_width) // 2
-        start_y = self.screen.get_height() // 2 - 50
+        start_y = self.screen.get_height() // 2 - int(50 * SCALE_FACTOR)
         
         # Create buttons for each option
         for i in range(4):
@@ -221,7 +224,7 @@ class QuestionUI:
             button_img.blit(gradient, (0, 0))
             # Add border
             pygame.draw.rect(button_img, self.colors['border'], button_img.get_rect(), 2)
-            button = Button(start_x, start_y + (button_height + spacing) * i, button_img, 1)
+            button = Button(start_x, start_y + (button_height + spacing) * i, button_img)
             self.buttons.append(button)
     
     def reset_available_questions(self):
@@ -389,10 +392,10 @@ class QuestionUI:
         self.screen.blit(self.overlay, (0, 0))
         
         # Draw question box
-        question_lines = self.wrap_text(self.current_question["question"], self.title_font, 700)
-        question_height = len(question_lines) * self.title_font.get_height() + 40
+        question_lines = self.wrap_text(self.current_question["question"], self.title_font, int(700 * SCALE_FACTOR))
+        question_height = len(question_lines) * self.title_font.get_height() + int(40 * SCALE_FACTOR)
         
-        question_box_width = 700
+        question_box_width = int(700 * SCALE_FACTOR)
         question_box_x = (self.screen.get_width() - question_box_width) // 2
         question_box_y = self.screen.get_height() // 4 - question_height // 2
         
@@ -413,23 +416,23 @@ class QuestionUI:
             line_surface = self.title_font.render(line, True, self.colors['text'])
             line_surface.set_alpha(question_alpha)
             line_rect = line_surface.get_rect(center=(self.screen.get_width() // 2,
-                                                    question_box_y + 20 + i * self.title_font.get_height()))
+                                                    question_box_y + int(20 * SCALE_FACTOR) + i * self.title_font.get_height()))
             self.screen.blit(line_surface, line_rect)
         
         # Draw options with color feedback
-        button_width = 600
-        button_height = 50
-        spacing = 20
+        button_width = int(600 * SCALE_FACTOR)
+        button_height = int(50 * SCALE_FACTOR)
+        spacing = int(20 * SCALE_FACTOR)
         
         for i, option in enumerate(self.current_question["options"]):
             # Wrap option text
-            option_lines = self.wrap_text(option, self.font, button_width - 40)
-            option_height = len(option_lines) * self.font.get_height() + 20
-            button_height = max(50, option_height)
+            option_lines = self.wrap_text(option, self.font, button_width - int(40 * SCALE_FACTOR))
+            option_height = len(option_lines) * self.font.get_height() + int(20 * SCALE_FACTOR)
+            button_height = max(int(50 * SCALE_FACTOR), option_height)
             
             # Calculate button position
             button_x = (self.screen.get_width() - button_width) // 2
-            button_y = self.screen.get_height() // 2 - 50 + i * (button_height + spacing)
+            button_y = self.screen.get_height() // 2 - int(50 * SCALE_FACTOR) + i * (button_height + spacing)
             
             # Determine button colors based on selection state
             if self.question_answered and self.show_feedback:
@@ -469,28 +472,28 @@ class QuestionUI:
                 line_surface = self.font.render(line, True, self.colors['text'])
                 line_surface.set_alpha(question_alpha)
                 line_rect = line_surface.get_rect(center=(self.screen.get_width() // 2,
-                                                        button_y + 10 + j * self.font.get_height()))
+                                                        button_y + int(10 * SCALE_FACTOR) + j * self.font.get_height()))
                 self.screen.blit(line_surface, line_rect)
         
         # Draw feedback message
         if self.question_answered and self.show_feedback and self.feedback_timer > 0:
-            feedback_lines = self.wrap_text(self.feedback_message, self.font, 600)
-            feedback_height = len(feedback_lines) * self.font.get_height() + 40
-            feedback_y = self.screen.get_height() // 2 + 200
+            feedback_lines = self.wrap_text(self.feedback_message, self.font, int(600 * SCALE_FACTOR))
+            feedback_height = len(feedback_lines) * self.font.get_height() + int(40 * SCALE_FACTOR)
+            feedback_y = self.screen.get_height() // 2 + int(200 * SCALE_FACTOR)
             
             # Create feedback surface with alpha
-            feedback_surface = pygame.Surface((600, feedback_height), pygame.SRCALPHA)
+            feedback_surface = pygame.Surface((int(600 * SCALE_FACTOR), feedback_height), pygame.SRCALPHA)
             feedback_surface.fill((0, 0, 0, int(self.feedback_alpha * 0.8)))
             
             # Draw feedback text
             for i, line in enumerate(feedback_lines):
                 text = self.font.render(line, True, self.colors['text'])
                 text.set_alpha(int(self.feedback_alpha))
-                text_rect = text.get_rect(center=(300, 20 + i * self.font.get_height()))
+                text_rect = text.get_rect(center=(int(300 * SCALE_FACTOR), int(20 * SCALE_FACTOR) + i * self.font.get_height()))
                 feedback_surface.blit(text, text_rect)
             
             # Draw feedback box
-            feedback_x = (self.screen.get_width() - 600) // 2
+            feedback_x = (self.screen.get_width() - int(600 * SCALE_FACTOR)) // 2
             self.screen.blit(feedback_surface, (feedback_x, feedback_y))
 
     def set_game_paused(self, paused):
