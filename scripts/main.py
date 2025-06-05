@@ -604,42 +604,48 @@ class Chaser(pygame.sprite.Sprite):
 		self.max_buffer_size = 1000
 		self.training_enabled = False  # Disable training during gameplay
 		self.start_time = pygame.time.get_ticks()  # Record start time
-		self.delay = 5000  # 5 seconds delay in milliseconds
+		self.delay = 8000  # 8 seconds delay in milliseconds
 		self.is_active = False  # Flag to track if chaser is active
+		self.paused_time = 0  # Track time spent paused
+		self.last_pause_time = 0  # Track when we last paused
 
-	def update(self, player):
-		# Check if delay period has passed
+	def update(self, player, game_paused=False):
 		current_time = pygame.time.get_ticks()
-		if not self.is_active and current_time - self.start_time >= self.delay:
+		
+		# If game is paused by question, don't count this time
+		if game_paused:
+			if self.last_pause_time == 0:  # Just entered pause state
+				self.last_pause_time = current_time
+			return  # Don't process movement while paused
+		else:
+			if self.last_pause_time != 0:  # Just exited pause state
+				self.paused_time += current_time - self.last_pause_time
+				self.last_pause_time = 0
+
+		# Only check activation if not paused
+		if not self.is_active and (current_time - self.start_time - self.paused_time) >= self.delay:
 			self.is_active = True
-			# Increase speed based on level (reduced by 20%)
-			self.speed = self.base_speed * (1 + current_level * 0.16)  # 16% speed increase per level (reduced from 20%)
+			self.speed = self.base_speed * (1 + current_level * 0.16)
 
 		# Only move if active
 		if self.is_active:
-			# Get current state
 			dx = player.rect.x - self.rect.x
 			dy = player.rect.y - self.rect.y
 			
-			# Normalize the direction
 			distance = max(abs(dx), abs(dy))
 			if distance > 0:
 				dx = dx / distance
 				dy = dy / distance
 			
-			# If model exists, use it for movement
 			if self.model is not None:
 				state = np.array([[dx, dy, distance]])
 				action = self.model.predict(state, verbose=0)[0]
-				
-				# Apply the predicted movement
 				self.rect.x += action[0] * self.speed
 				self.rect.y += action[1] * self.speed
 			else:
-				# Fallback to simple chase behavior
 				self.rect.x += dx * self.speed
 				self.rect.y += dy * self.speed
-	
+
 	def draw(self, screen):
 		screen.blit(self.image, self.rect)
 
@@ -709,9 +715,8 @@ class Game():
 		self.properties()
 		world = World()
 		player = Character(0, screen_height - 130)
-		chaser = Chaser(0, screen_height - 130)  # Use Chaser instead of RLChaser
-		chaser.start_time = pygame.time.get_ticks()  # Reset start time
-		chaser.is_active = False  # Reset active state
+		chaser = Chaser(0, screen_height - 130)
+		self.chaser = chaser  # Store chaser reference
 		game_over = 0
 
 		values = []
@@ -725,10 +730,13 @@ class Game():
 		global current_level
 		timer = 30
 		ttext = str(timer)
-
 		self.timer_counter, self.timer_text = timer, ttext.rjust(3)
 		pygame.time.set_timer(pygame.USEREVENT, 1000)
 		self.timer_font = pygame.font.SysFont('comicsansms', 25)
+		# Set the chaser's start time to match the timer start
+		if hasattr(self, 'chaser'):
+			self.chaser.start_time = pygame.time.get_ticks()
+			self.chaser.is_active = False
 
 	# start game functionality
 	def start(self):
@@ -771,9 +779,11 @@ class Game():
 				# Draw platforms first
 				plats[0].draw(screen)
 				
-				# Only update chaser and platforms if game is not paused by question
+				# Update chaser with current pause state
+				chaser.update(player, self.question_ui.is_game_paused())
+				
+				# Only update other game elements if not paused
 				if not self.question_ui.is_game_paused():
-					chaser.update(player)
 					plats[0].update()
 					chaser.draw(screen)
 					
@@ -784,6 +794,9 @@ class Game():
 					# Check for collision between player and chaser
 					if chaser.rect.colliderect(player.rect):
 						game_over = -1  # Player caught by chaser
+				else:
+					# When paused, just draw the chaser without updating
+					chaser.draw(screen)
 
 				# Check for collision with moving platforms in level 1
 				if current_level == 0:  # Level 1
