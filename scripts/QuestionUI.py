@@ -1,0 +1,497 @@
+import pygame
+import Config
+import os
+import sys
+import random
+import math
+
+# Add Button import
+from Button import Button
+
+class QuestionUI:
+    def __init__(self, screen):
+        self.screen = screen
+        self.active = False
+        self.current_question = None
+        self.selected_option = None
+        self.buttons = []
+        self.font = pygame.font.SysFont('comicsansms', 20)
+        self.title_font = pygame.font.SysFont('comicsansms', 28)
+        self.game_paused = False
+        self.question_answered = False
+        self.correct_answer = None
+        self.feedback_alpha = 0
+        self.feedback_timer = 0
+        self.overlay_alpha = 0
+        self.hover_index = -1
+        self.animation_time = 0
+        self.show_feedback = False
+        self.feedback_message = ""
+        
+        # Track asked questions
+        self.asked_questions = set()
+        self.available_questions = []
+        
+        # Enhanced color scheme
+        self.colors = {
+            'background': (0, 0, 0),
+            'overlay': (0, 0, 0),
+            'text': (255, 255, 255),
+            'button': (45, 45, 45),
+            'button_hover': (60, 60, 60),
+            'correct': (46, 204, 113),  # Green
+            'wrong': (231, 76, 60),     # Red
+            'border': (100, 100, 100),
+            'gradient_start': (41, 128, 185),  # Blue
+            'gradient_end': (142, 68, 173),    # Purple
+            'option_gradient_start': (52, 152, 219),  # Light Blue
+            'option_gradient_end': (155, 89, 182),    # Light Purple
+            'hover_gradient_start': (41, 128, 185),   # Dark Blue
+            'hover_gradient_end': (142, 68, 173),     # Dark Purple
+            'correct_gradient_start': (39, 174, 96),  # Light Green
+            'correct_gradient_end': (46, 204, 113),   # Green
+            'wrong_gradient_start': (192, 57, 43),    # Dark Red
+            'wrong_gradient_end': (231, 76, 60)       # Light Red
+        }
+        
+        # Create a semi-transparent overlay
+        self.overlay = pygame.Surface((screen.get_width(), screen.get_height()))
+        self.overlay.fill(self.colors['overlay'])
+        
+        # Create option buttons
+        self.create_buttons()
+        
+        # Questions list
+        self.questions = [
+            {
+                "question": "Why might a large company lease machinery instead of buying it outright?",
+                "options": ["To increase taxes", "To own it faster", "To reduce upfront costs and save cash", "To avoid training employees"],
+                "correct": 2,
+                "explanation": "Leasing machinery helps companies reduce upfront costs and conserve cash flow."
+            },
+            {
+                "question": "What is typically used as security in equipment financing?",
+                "options": ["Office rent agreement", "The equipment itself", "Employee contracts", "Company logo"],
+                "correct": 1,
+                "explanation": "The equipment being financed is typically used as security for the loan."
+            },
+            {
+                "question": "Which of these is an example of something a company might finance with an equipment loan?",
+                "options": ["Mobile apps", "Office snacks", "Industrial machines", "Manager salaries"],
+                "correct": 2,
+                "explanation": "Industrial machines are common examples of equipment that companies finance."
+            },
+            {
+                "question": "What is one major benefit of leasing equipment instead of buying it?",
+                "options": ["You can return it after each use", "Lower maintenance fees", "No need for insurance", "Use now, pay over time"],
+                "correct": 3,
+                "explanation": "Leasing allows companies to use equipment immediately while spreading the cost over time."
+            },
+            {
+                "question": "Which type of business is most likely to use equipment financing?",
+                "options": ["Freelance blogger", "Heavy construction company", "Local pizza delivery service", "Online clothing reseller"],
+                "correct": 1,
+                "explanation": "Heavy construction companies often need expensive equipment and use financing to acquire it."
+            },
+            {
+                "question": "Leasing equipment is often preferred by businesses because:",
+                "options": ["It comes with free upgrades", "It requires no legal contracts", "It frees up money for other investments", "It removes the need for employees"],
+                "correct": 2,
+                "explanation": "Leasing frees up capital that can be used for other business investments."
+            },
+            {
+                "question": "What happens to the equipment at the end of a lease?",
+                "options": ["It disappears", "The company usually returns or buys it", "It turns into a gift", "It is shared with competitors"],
+                "correct": 1,
+                "explanation": "At the end of a lease, companies typically have the option to return the equipment or purchase it."
+            },
+            {
+                "question": "What does a company usually offer as security when taking a loan backed by assets?",
+                "options": ["Its future ideas", "Inventory or unpaid customer invoices", "Social media followers", "Office snacks"],
+                "correct": 1,
+                "explanation": "Companies typically use inventory or accounts receivable as security for asset-backed loans."
+            },
+            {
+                "question": "Why would a business use a loan backed by its assets?",
+                "options": ["To buy shares in other companies", "To get quick access to money without selling ownership", "To shut down operations", "To pay employee bonuses only"],
+                "correct": 1,
+                "explanation": "Asset-backed loans provide quick access to capital without giving up company ownership."
+            },
+            {
+                "question": "If a company doesn't have much cash but has many unpaid customer invoices, what can it do?",
+                "options": ["Sell the business", "Ignore the situation", "Use those invoices to get a loan", "Change the company name"],
+                "correct": 2,
+                "explanation": "Companies can use unpaid invoices (accounts receivable) as collateral for financing."
+            },
+            {
+                "question": "What kind of assets can help a company get a business loan?",
+                "options": ["Office pets", "Furniture only", "Equipment, inventory, or customer payments due", "Company name"],
+                "correct": 2,
+                "explanation": "Tangible assets like equipment, inventory, and accounts receivable can be used as collateral."
+            },
+            {
+                "question": "Why would a company choose a loan secured by assets instead of a regular loan?",
+                "options": ["Easier to qualify if the company owns valuable stuff", "It always comes with free gadgets", "It doesn't need to be repaid", "It avoids any paperwork"],
+                "correct": 0,
+                "explanation": "Asset-secured loans are often easier to qualify for if the company has valuable assets."
+            },
+            {
+                "question": "A business with a lot of unsold inventory might use that inventory to:",
+                "options": ["Start a loyalty program", "Launch an IPO", "Get a loan to manage cash flow", "Close for the season"],
+                "correct": 2,
+                "explanation": "Inventory can be used as collateral to secure financing for cash flow management."
+            },
+            {
+                "question": "What happens if a business fails to repay a loan secured by assets?",
+                "options": ["The loan disappears", "The lender may take the pledged assets", "The government pays the loan", "The company gets more credit"],
+                "correct": 1,
+                "explanation": "If a loan is not repaid, the lender has the right to seize the pledged assets."
+            },
+            {
+                "question": "Why do large companies use letters of credit when trading with other countries?",
+                "options": ["To advertise faster", "To ensure safe and guaranteed payment", "To get frequent flyer points", "To skip customs"],
+                "correct": 1,
+                "explanation": "Letters of credit provide payment security in international trade transactions."
+            },
+            {
+                "question": "If a company is waiting for payment from a foreign customer, how can it improve its cash flow?",
+                "options": ["Pause all business", "Take a loan using that pending payment", "Buy stocks", "Start paying interest to the customer"],
+                "correct": 1,
+                "explanation": "Companies can use pending foreign payments as collateral for financing to improve cash flow."
+            },
+            {
+                "question": "In international trade, which problem does a letter of credit help solve?",
+                "options": ["Language barriers", "Late shipping", "Trust between buyer and seller", "Packaging issues"],
+                "correct": 2,
+                "explanation": "Letters of credit help establish trust between international trading partners."
+            },
+            {
+                "question": "A company that sells goods to buyers in different countries might need trade finance to:",
+                "options": ["Post on social media", "Track employee attendance", "Manage shipping and payment delays", "Buy food for team lunches"],
+                "correct": 2,
+                "explanation": "Trade finance helps companies manage the delays between shipping and receiving payment."
+            },
+            {
+                "question": "One reason big companies use trade finance is to:",
+                "options": ["Win awards", "Boost employee morale", "Reduce risks in global transactions", "Change currencies instantly"],
+                "correct": 2,
+                "explanation": "Trade finance helps reduce risks associated with international transactions."
+            },
+            {
+                "question": "What's a benefit of using receivables finance in international trade?",
+                "options": ["Hire influencers", "Access money faster without waiting for customers to pay", "Reduce inventory size", "Send gifts to buyers"],
+                "correct": 1,
+                "explanation": "Receivables finance allows companies to access funds before customers pay their invoices."
+            }
+        ]
+        
+        # Initialize available questions
+        self.reset_available_questions()
+    
+    def create_gradient_surface(self, width, height, start_color, end_color, angle=0):
+        surface = pygame.Surface((width, height))
+        for y in range(height):
+            # Calculate gradient color
+            ratio = y / height
+            r = int(start_color[0] * (1 - ratio) + end_color[0] * ratio)
+            g = int(start_color[1] * (1 - ratio) + end_color[1] * ratio)
+            b = int(start_color[2] * (1 - ratio) + end_color[2] * ratio)
+            pygame.draw.line(surface, (r, g, b), (0, y), (width, y))
+        return surface
+    
+    def create_buttons(self):
+        self.buttons = []
+        
+        # Button dimensions and spacing
+        button_width = 500
+        button_height = 60
+        spacing = 25
+        
+        # Calculate starting position to center the buttons
+        start_x = (self.screen.get_width() - button_width) // 2
+        start_y = self.screen.get_height() // 2 - 50
+        
+        # Create buttons for each option
+        for i in range(4):
+            # Create button with gradient background
+            button_img = pygame.Surface((button_width, button_height))
+            gradient = self.create_gradient_surface(button_width, button_height,
+                                                  self.colors['option_gradient_start'],
+                                                  self.colors['option_gradient_end'])
+            button_img.blit(gradient, (0, 0))
+            # Add border
+            pygame.draw.rect(button_img, self.colors['border'], button_img.get_rect(), 2)
+            button = Button(start_x, start_y + (button_height + spacing) * i, button_img, 1)
+            self.buttons.append(button)
+    
+    def reset_available_questions(self):
+        """Reset the available questions pool"""
+        self.available_questions = list(range(len(self.questions)))
+        random.shuffle(self.available_questions)
+
+    def show_random_question(self):
+        """Show a random question that hasn't been asked recently"""
+        self.active = True
+        self.game_paused = True
+        self.question_answered = False
+        
+        # If we've used all questions, reset the pool
+        if not self.available_questions:
+            self.reset_available_questions()
+        
+        # Get a random question from available questions
+        question_index = self.available_questions.pop()
+        self.current_question = self.questions[question_index]
+        self.correct_answer = self.current_question["correct"]
+        self.selected_option = None
+        self.show_feedback = False
+        self.feedback_message = ""
+        
+        # Add to asked questions
+        self.asked_questions.add(question_index)
+    
+    def handle_events(self, event):
+        if not self.active or self.question_answered:
+            return None
+
+        # Handle mouse movement for hover effect
+        if event.type == pygame.MOUSEMOTION:
+            for i, button in enumerate(self.buttons):
+                if button.rect.collidepoint(event.pos):
+                    self.hover_index = i
+                    break
+            else:
+                self.hover_index = -1
+
+        # Handle keyboard navigation
+        if event.type == pygame.KEYDOWN:
+            if event.key == pygame.K_UP:
+                self.hover_index = max(0, self.hover_index - 1)
+            elif event.key == pygame.K_DOWN:
+                self.hover_index = min(3, self.hover_index + 1)
+            elif event.key == pygame.K_RETURN and self.hover_index != -1:
+                self.selected_option = self.hover_index
+                self.question_answered = True
+                self.show_feedback = True
+                self.feedback_timer = 60  # 1 second delay at 60 FPS
+                self.feedback_alpha = 0
+                # Set feedback message immediately
+                if self.hover_index == self.correct_answer:
+                    self.feedback_message = "🎉 Correct! " + self.current_question["explanation"]
+                else:
+                    self.feedback_message = f"❌ Incorrect! The correct answer was: {self.current_question['options'][self.correct_answer]}"
+                return self.hover_index == self.correct_answer
+
+        if event.type == pygame.MOUSEBUTTONDOWN:
+            for i, button in enumerate(self.buttons):
+                if button.rect.collidepoint(event.pos):
+                    self.selected_option = i
+                    self.question_answered = True
+                    self.show_feedback = True
+                    self.feedback_timer = 60  # 1 second delay at 60 FPS
+                    self.feedback_alpha = 0
+                    # Set feedback message immediately
+                    if i == self.correct_answer:
+                        self.feedback_message = "🎉 Correct! " + self.current_question["explanation"]
+                    else:
+                        self.feedback_message = f"❌ Incorrect! The correct answer was: {self.current_question['options'][self.correct_answer]}"
+                    return i == self.correct_answer
+        return None
+    
+    def is_active(self):
+        return self.active
+    
+    def is_game_paused(self):
+        return self.game_paused
+    
+    def check_answer(self, selected_option):
+        if self.current_question and not self.question_answered:
+            self.selected_option = selected_option
+            self.question_answered = True
+            self.show_feedback = True
+            self.feedback_timer = 60  # 1 second delay at 60 FPS
+            
+            if selected_option == self.current_question['correct']:
+                self.feedback_message = "🎉 Correct! " + self.current_question["explanation"]
+                global points
+                points += 5
+            else:
+                self.feedback_message = f"❌ Incorrect! The correct answer was: {self.current_question['options'][self.correct_answer]}"
+            
+            self.feedback_alpha = 0
+            return selected_option == self.current_question['correct']
+        return False
+    
+    def reset(self):
+        # First unpause the game
+        self.set_game_paused(False)
+        # Then reset all other states
+        self.active = False
+        self.question_answered = False
+        self.selected_option = None
+        self.current_question = None
+        self.correct_answer = None
+        self.show_feedback = False
+        self.feedback_message = ""
+        self.feedback_alpha = 0
+        self.feedback_timer = 0
+        self.overlay_alpha = 0
+        self.hover_index = -1
+    
+    def wrap_text(self, text, font, max_width):
+        """Wrap text to fit within max_width"""
+        words = text.split(' ')
+        lines = []
+        current_line = []
+        
+        for word in words:
+            # Test if adding this word exceeds the width
+            test_line = ' '.join(current_line + [word])
+            test_width = font.size(test_line)[0]
+            
+            if test_width <= max_width:
+                current_line.append(word)
+            else:
+                if current_line:
+                    lines.append(' '.join(current_line))
+                current_line = [word]
+        
+        if current_line:
+            lines.append(' '.join(current_line))
+            
+        return lines
+
+    def draw(self):
+        if not self.active or self.current_question is None:
+            return
+            
+        # Update animation time
+        self.animation_time = (self.animation_time + 0.02) % (2 * math.pi)
+        
+        # Handle feedback timing
+        if self.question_answered and self.show_feedback:
+            if self.feedback_timer > 0:
+                self.feedback_timer -= 1
+                # Fade in during first half, fade out during second half
+                if self.feedback_timer > 30:
+                    self.feedback_alpha = min(255, self.feedback_alpha + 17)
+                else:
+                    self.feedback_alpha = max(0, self.feedback_alpha - 17)
+            else:
+                # Reset everything when feedback is complete
+                self.reset()  # This will handle both unpausing and resetting
+                return
+        
+        # Smoothly fade in the overlay
+        if self.overlay_alpha < 200:
+            self.overlay_alpha = min(200, self.overlay_alpha + 40)
+        self.overlay.set_alpha(self.overlay_alpha)
+        self.screen.blit(self.overlay, (0, 0))
+        
+        # Draw question box
+        question_lines = self.wrap_text(self.current_question["question"], self.title_font, 700)
+        question_height = len(question_lines) * self.title_font.get_height() + 40
+        
+        question_box_width = 700
+        question_box_x = (self.screen.get_width() - question_box_width) // 2
+        question_box_y = self.screen.get_height() // 4 - question_height // 2
+        
+        # Create animated gradient for question box
+        question_gradient = self.create_gradient_surface(
+            question_box_width, question_height,
+            self.colors['gradient_start'],
+            self.colors['gradient_end'],
+            math.sin(self.animation_time) * 45
+        )
+        self.screen.blit(question_gradient, (question_box_x, question_box_y))
+        pygame.draw.rect(self.screen, self.colors['border'], 
+                        (question_box_x, question_box_y, question_box_width, question_height), 2)
+        
+        # Draw wrapped question text
+        question_alpha = min(255, self.overlay_alpha * 2)
+        for i, line in enumerate(question_lines):
+            line_surface = self.title_font.render(line, True, self.colors['text'])
+            line_surface.set_alpha(question_alpha)
+            line_rect = line_surface.get_rect(center=(self.screen.get_width() // 2,
+                                                    question_box_y + 20 + i * self.title_font.get_height()))
+            self.screen.blit(line_surface, line_rect)
+        
+        # Draw options with color feedback
+        button_width = 600
+        button_height = 50
+        spacing = 20
+        
+        for i, option in enumerate(self.current_question["options"]):
+            # Wrap option text
+            option_lines = self.wrap_text(option, self.font, button_width - 40)
+            option_height = len(option_lines) * self.font.get_height() + 20
+            button_height = max(50, option_height)
+            
+            # Calculate button position
+            button_x = (self.screen.get_width() - button_width) // 2
+            button_y = self.screen.get_height() // 2 - 50 + i * (button_height + spacing)
+            
+            # Determine button colors based on selection state
+            if self.question_answered and self.show_feedback:
+                if i == self.correct_answer:
+                    start_color = self.colors['correct_gradient_start']
+                    end_color = self.colors['correct_gradient_end']
+                    border_color = self.colors['correct']
+                elif i == self.selected_option:
+                    start_color = self.colors['wrong_gradient_start']
+                    end_color = self.colors['wrong_gradient_end']
+                    border_color = self.colors['wrong']
+                else:
+                    start_color = self.colors['option_gradient_start']
+                    end_color = self.colors['option_gradient_end']
+                    border_color = self.colors['border']
+            elif i == self.hover_index:
+                start_color = self.colors['hover_gradient_start']
+                end_color = self.colors['hover_gradient_end']
+                border_color = (255, 255, 255)
+            else:
+                start_color = self.colors['option_gradient_start']
+                end_color = self.colors['option_gradient_end']
+                border_color = self.colors['border']
+            
+            # Create and draw button gradient
+            button_gradient = self.create_gradient_surface(
+                button_width, button_height,
+                start_color, end_color,
+                math.sin(self.animation_time) * 45
+            )
+            self.screen.blit(button_gradient, (button_x, button_y))
+            pygame.draw.rect(self.screen, border_color, 
+                           (button_x, button_y, button_width, button_height), 2)
+            
+            # Draw wrapped option text
+            for j, line in enumerate(option_lines):
+                line_surface = self.font.render(line, True, self.colors['text'])
+                line_surface.set_alpha(question_alpha)
+                line_rect = line_surface.get_rect(center=(self.screen.get_width() // 2,
+                                                        button_y + 10 + j * self.font.get_height()))
+                self.screen.blit(line_surface, line_rect)
+        
+        # Draw feedback message
+        if self.question_answered and self.show_feedback and self.feedback_timer > 0:
+            feedback_lines = self.wrap_text(self.feedback_message, self.font, 600)
+            feedback_height = len(feedback_lines) * self.font.get_height() + 40
+            feedback_y = self.screen.get_height() // 2 + 200
+            
+            # Create feedback surface with alpha
+            feedback_surface = pygame.Surface((600, feedback_height), pygame.SRCALPHA)
+            feedback_surface.fill((0, 0, 0, int(self.feedback_alpha * 0.8)))
+            
+            # Draw feedback text
+            for i, line in enumerate(feedback_lines):
+                text = self.font.render(line, True, self.colors['text'])
+                text.set_alpha(int(self.feedback_alpha))
+                text_rect = text.get_rect(center=(300, 20 + i * self.font.get_height()))
+                feedback_surface.blit(text, text_rect)
+            
+            # Draw feedback box
+            feedback_x = (self.screen.get_width() - 600) // 2
+            self.screen.blit(feedback_surface, (feedback_x, feedback_y))
+
+    def set_game_paused(self, paused):
+        self.game_paused = paused 
