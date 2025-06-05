@@ -34,6 +34,7 @@ game_over = 0 					# Game-Over flag
 current_level = 0				# level counter
 max_levels = 2					# number of game levels (0 indexed)
 score_count = 0					# coin score count
+points = 0                      # points for correct answers
 
 	# --> Sounds
 pygame.mixer.pre_init(44100, -16, 2, 512)
@@ -683,6 +684,7 @@ class Game():
 		self.clock = pygame.time.Clock()
 		self.game_menu()
 		self.question_ui = QuestionUI(screen)  # Initialize question UI
+		self.score_font = pygame.font.SysFont('comicsansms', 25)  # Font for score display
 		self.start()
 
 	# setup in-game menu
@@ -766,6 +768,7 @@ class Game():
 		global game_finished
 		global max_levels
 		global current_level
+		global points
 
 		self.properties()
 		world = World()
@@ -787,6 +790,7 @@ class Game():
 					run = False
 				if self.play_button.draw():
 					in_menu = False
+					points = 0  # Reset points when starting new game
 			else:
 				world.draw_tiles()
 				check_points[0].draw(screen)
@@ -804,8 +808,9 @@ class Game():
 					plats[0].update()
 					chaser.draw(screen)
 					
-					# Draw timer if game is not paused
+					# Draw timer and score if game is not paused
 					screen.blit(self.timer_font.render(self.timer_text, True, (47, 48, 29)), (60, 42))
+					screen.blit(self.score_font.render(f"Score: {points}", True, (47, 48, 29)), (screen_width - 150, 42))
 					
 					# Check for collision between player and chaser
 					if chaser.rect.colliderect(player.rect):
@@ -828,8 +833,6 @@ class Game():
 				# Draw question UI if active
 				if self.question_ui.is_active():
 					self.question_ui.draw()
-					# Ensure game is paused while question is active
-					self.question_ui.set_game_paused(True)
 
 				# player active
 				if game_over == 0:
@@ -855,6 +858,23 @@ class Game():
 				# player death
 				if game_over == -1:
 					self.timer_counter = 0
+					
+					# Draw game over message and score
+					title_font = pygame.font.SysFont('comicsansms', 50)
+					subtitle_font = pygame.font.SysFont('comicsansms', 30)
+					
+					# Main title
+					title = title_font.render("Game Over!", True, (255, 0, 0))
+					title_rect = title.get_rect(center=(screen_width//2, screen_height//2 - 100))
+					
+					# Score message
+					score_text = subtitle_font.render(f"Total Score: {points}", True, (255, 255, 255))
+					score_rect = score_text.get_rect(center=(screen_width//2, screen_height//2 - 30))
+					
+					# Draw the messages
+					screen.blit(title, title_rect)
+					screen.blit(score_text, score_rect)
+					
 					if self.resume_button.draw():
 						values = self.load_level()
 						player = values[0]
@@ -875,8 +895,8 @@ class Game():
 					title = title_font.render("🎉 Congratulations! 🎉", True, (255, 215, 0))
 					title_rect = title.get_rect(center=(screen_width//2, screen_height//2 - 50))
 					
-					# Subtitle with emojis
-					subtitle = subtitle_font.render("You are now a Champion Banker! 💰🏆", True, (255, 255, 255))
+					# Subtitle with emojis and final score
+					subtitle = subtitle_font.render(f"You are now a Champion Banker! 💰🏆 Final Score: {points}", True, (255, 255, 255))
 					subtitle_rect = subtitle.get_rect(center=(screen_width//2, screen_height//2 + 20))
 					
 					# Draw the messages
@@ -894,9 +914,11 @@ class Game():
 				if self.question_ui.is_active():
 					result = self.question_ui.handle_events(event)
 					if result is not None:
-						# Question was answered, immediately continue
-						self.question_ui.reset()  # Reset the question UI
-						self.question_ui.set_game_paused(False)  # Unpause the game
+						# Question was answered, check if correct
+						if result:  # If answer was correct
+							points += 5  # Add 5 points for correct answer
+						# Don't reset or unpause here - let QuestionUI handle the delay
+						# The game will automatically unpause when QuestionUI is done
 
 				# game timer
 				if event.type == pygame.USEREVENT and not self.question_ui.is_game_paused():

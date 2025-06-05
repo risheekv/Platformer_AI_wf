@@ -25,7 +25,6 @@ class QuestionUI:
         self.overlay_alpha = 0
         self.hover_index = -1
         self.animation_time = 0
-        self.selection_delay = 0
         self.show_feedback = False
         self.feedback_message = ""
         
@@ -245,12 +244,6 @@ class QuestionUI:
         self.current_question = self.questions[question_index]
         self.correct_answer = self.current_question["correct"]
         self.selected_option = None
-        self.feedback_alpha = 0
-        self.feedback_timer = 0
-        self.overlay_alpha = 0
-        self.hover_index = -1
-        self.animation_time = 0
-        self.selection_delay = 0
         self.show_feedback = False
         self.feedback_message = ""
         
@@ -279,7 +272,9 @@ class QuestionUI:
             elif event.key == pygame.K_RETURN and self.hover_index != -1:
                 self.selected_option = self.hover_index
                 self.question_answered = True
-                self.selection_delay = 60  # 1 second delay at 60 FPS
+                self.show_feedback = True
+                self.feedback_timer = 60  # 1 second delay at 60 FPS
+                self.feedback_alpha = 0
                 # Set feedback message immediately
                 if self.hover_index == self.correct_answer:
                     self.feedback_message = "🎉 Correct! " + self.current_question["explanation"]
@@ -292,7 +287,9 @@ class QuestionUI:
                 if button.rect.collidepoint(event.pos):
                     self.selected_option = i
                     self.question_answered = True
-                    self.selection_delay = 60  # 1 second delay at 60 FPS
+                    self.show_feedback = True
+                    self.feedback_timer = 60  # 1 second delay at 60 FPS
+                    self.feedback_alpha = 0
                     # Set feedback message immediately
                     if i == self.correct_answer:
                         self.feedback_message = "🎉 Correct! " + self.current_question["explanation"]
@@ -308,25 +305,38 @@ class QuestionUI:
         return self.game_paused
     
     def check_answer(self, selected_option):
-        if selected_option is None:
-            return False
-        return selected_option == self.current_question["correct"]
+        if self.current_question and not self.question_answered:
+            self.selected_option = selected_option
+            self.question_answered = True
+            self.show_feedback = True
+            self.feedback_timer = 60  # 1 second delay at 60 FPS
+            
+            if selected_option == self.current_question['correct']:
+                self.feedback_message = "🎉 Correct! " + self.current_question["explanation"]
+                global points
+                points += 5
+            else:
+                self.feedback_message = f"❌ Incorrect! The correct answer was: {self.current_question['options'][self.correct_answer]}"
+            
+            self.feedback_alpha = 0
+            return selected_option == self.current_question['correct']
+        return False
     
     def reset(self):
+        # First unpause the game
+        self.set_game_paused(False)
+        # Then reset all other states
         self.active = False
-        self.game_paused = False
         self.question_answered = False
         self.selected_option = None
         self.current_question = None
         self.correct_answer = None
+        self.show_feedback = False
+        self.feedback_message = ""
         self.feedback_alpha = 0
         self.feedback_timer = 0
         self.overlay_alpha = 0
         self.hover_index = -1
-        self.animation_time = 0
-        self.selection_delay = 0
-        self.show_feedback = False
-        self.feedback_message = ""
     
     def wrap_text(self, text, font, max_width):
         """Wrap text to fit within max_width"""
@@ -358,20 +368,19 @@ class QuestionUI:
         # Update animation time
         self.animation_time = (self.animation_time + 0.02) % (2 * math.pi)
         
-        # Handle selection delay and feedback timing
-        if self.question_answered:
-            if self.selection_delay > 0:
-                self.selection_delay -= 1
-                if self.selection_delay == 0:
-                    self.show_feedback = True
-                    self.feedback_timer = 60  # Show feedback for 1 second
-                    self.feedback_alpha = 0  # Reset feedback alpha for fade in
-            elif self.show_feedback and self.feedback_timer > 0:
+        # Handle feedback timing
+        if self.question_answered and self.show_feedback:
+            if self.feedback_timer > 0:
                 self.feedback_timer -= 1
-                if self.feedback_timer == 0:
-                    # Only reset and unpause when feedback is complete
-                    self.reset()
-                    self.set_game_paused(False)
+                # Fade in during first half, fade out during second half
+                if self.feedback_timer > 30:
+                    self.feedback_alpha = min(255, self.feedback_alpha + 17)
+                else:
+                    self.feedback_alpha = max(0, self.feedback_alpha - 17)
+            else:
+                # Reset everything when feedback is complete
+                self.reset()  # This will handle both unpausing and resetting
+                return
         
         # Smoothly fade in the overlay
         if self.overlay_alpha < 200:
@@ -379,11 +388,10 @@ class QuestionUI:
         self.overlay.set_alpha(self.overlay_alpha)
         self.screen.blit(self.overlay, (0, 0))
         
-        # Wrap question text
+        # Draw question box
         question_lines = self.wrap_text(self.current_question["question"], self.title_font, 700)
         question_height = len(question_lines) * self.title_font.get_height() + 40
         
-        # Draw question box with wrapped text
         question_box_width = 700
         question_box_x = (self.screen.get_width() - question_box_width) // 2
         question_box_y = self.screen.get_height() // 4 - question_height // 2
@@ -408,7 +416,7 @@ class QuestionUI:
                                                     question_box_y + 20 + i * self.title_font.get_height()))
             self.screen.blit(line_surface, line_rect)
         
-        # Wrap and draw options
+        # Draw options with color feedback
         button_width = 600
         button_height = 50
         spacing = 20
@@ -417,29 +425,34 @@ class QuestionUI:
             # Wrap option text
             option_lines = self.wrap_text(option, self.font, button_width - 40)
             option_height = len(option_lines) * self.font.get_height() + 20
-            button_height = max(50, option_height)  # Minimum height of 50
+            button_height = max(50, option_height)
             
             # Calculate button position
             button_x = (self.screen.get_width() - button_width) // 2
             button_y = self.screen.get_height() // 2 - 50 + i * (button_height + spacing)
             
-            # Determine button gradient colors based on state
+            # Determine button colors based on selection state
             if self.question_answered and self.show_feedback:
                 if i == self.correct_answer:
                     start_color = self.colors['correct_gradient_start']
                     end_color = self.colors['correct_gradient_end']
+                    border_color = self.colors['correct']
                 elif i == self.selected_option:
                     start_color = self.colors['wrong_gradient_start']
                     end_color = self.colors['wrong_gradient_end']
+                    border_color = self.colors['wrong']
                 else:
                     start_color = self.colors['option_gradient_start']
                     end_color = self.colors['option_gradient_end']
+                    border_color = self.colors['border']
             elif i == self.hover_index:
                 start_color = self.colors['hover_gradient_start']
                 end_color = self.colors['hover_gradient_end']
+                border_color = (255, 255, 255)
             else:
                 start_color = self.colors['option_gradient_start']
                 end_color = self.colors['option_gradient_end']
+                border_color = self.colors['border']
             
             # Create and draw button gradient
             button_gradient = self.create_gradient_surface(
@@ -448,18 +461,6 @@ class QuestionUI:
                 math.sin(self.animation_time) * 45
             )
             self.screen.blit(button_gradient, (button_x, button_y))
-            
-            # Draw button border
-            if self.question_answered and self.show_feedback:
-                if i == self.correct_answer:
-                    border_color = self.colors['correct']
-                elif i == self.selected_option:
-                    border_color = self.colors['wrong']
-                else:
-                    border_color = self.colors['border']
-            else:
-                border_color = (255, 255, 255) if i == self.hover_index else self.colors['border']
-            
             pygame.draw.rect(self.screen, border_color, 
                            (button_x, button_y, button_width, button_height), 2)
             
@@ -471,47 +472,26 @@ class QuestionUI:
                                                         button_y + 10 + j * self.font.get_height()))
                 self.screen.blit(line_surface, line_rect)
         
-        # Show feedback if question is answered and delay is complete
+        # Draw feedback message
         if self.question_answered and self.show_feedback and self.feedback_timer > 0:
-            # Calculate feedback alpha (fade in/out)
-            if self.feedback_timer > 30:
-                self.feedback_alpha = min(255, self.feedback_alpha + 17)
-            else:
-                self.feedback_alpha = max(0, self.feedback_alpha - 17)
-            
-            # Wrap feedback text
             feedback_lines = self.wrap_text(self.feedback_message, self.font, 600)
             feedback_height = len(feedback_lines) * self.font.get_height() + 40
+            feedback_y = self.screen.get_height() // 2 + 200
             
-            # Position feedback box
-            feedback_width = 600
-            feedback_box_x = (self.screen.get_width() - feedback_width) // 2
-            feedback_box_y = self.screen.get_height() * 3 // 4 + 50
+            # Create feedback surface with alpha
+            feedback_surface = pygame.Surface((600, feedback_height), pygame.SRCALPHA)
+            feedback_surface.fill((0, 0, 0, int(self.feedback_alpha * 0.8)))
             
-            # Draw feedback background with gradient
-            feedback_gradient = self.create_gradient_surface(
-                feedback_width, feedback_height,
-                self.colors['correct_gradient_start'] if self.selected_option == self.correct_answer 
-                else self.colors['wrong_gradient_start'],
-                self.colors['correct_gradient_end'] if self.selected_option == self.correct_answer 
-                else self.colors['wrong_gradient_end'],
-                math.sin(self.animation_time) * 45
-            )
-            feedback_gradient.set_alpha(self.feedback_alpha)
-            self.screen.blit(feedback_gradient, (feedback_box_x, feedback_box_y))
-            
-            # Draw feedback border
-            border_color = self.colors['correct'] if self.selected_option == self.correct_answer else self.colors['wrong']
-            pygame.draw.rect(self.screen, border_color, 
-                           (feedback_box_x, feedback_box_y, feedback_width, feedback_height), 2)
-            
-            # Draw wrapped feedback text
+            # Draw feedback text
             for i, line in enumerate(feedback_lines):
-                line_surface = self.font.render(line, True, border_color)
-                line_surface.set_alpha(self.feedback_alpha)
-                line_rect = line_surface.get_rect(center=(self.screen.get_width() // 2,
-                                                        feedback_box_y + 20 + i * self.font.get_height()))
-                self.screen.blit(line_surface, line_rect)
+                text = self.font.render(line, True, self.colors['text'])
+                text.set_alpha(int(self.feedback_alpha))
+                text_rect = text.get_rect(center=(300, 20 + i * self.font.get_height()))
+                feedback_surface.blit(text, text_rect)
+            
+            # Draw feedback box
+            feedback_x = (self.screen.get_width() - 600) // 2
+            self.screen.blit(feedback_surface, (feedback_x, feedback_y))
 
     def set_game_paused(self, paused):
         self.game_paused = paused 
