@@ -470,7 +470,7 @@ class Character():
 
 		# currently jumping
 		if key[pygame.K_w] and self.jumped == False and self.in_air == False:
-			self.vel_y = -14 # jump height
+			self.vel_y = -15  # Fixed jump height
 			self.jumped = True
 			self.counter += 1
 			self.animation = "jump"
