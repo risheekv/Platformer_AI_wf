@@ -751,7 +751,6 @@ class Game():
 		world = World()
 		player = Character(0, screen_height - 130)
 		chaser = Chaser(0, screen_height - 130)
-		self.game_timer()
 
 		run = True
 		while(run):
@@ -768,6 +767,7 @@ class Game():
 				if self.play_button.draw(screen):
 					in_menu = False
 					points = 0  # Reset points when starting new game
+					self.game_timer()  # Moved timer initialization here
 			else:
 				world.draw_tiles()
 				check_points[0].draw(screen)
@@ -815,6 +815,7 @@ class Game():
 				# Draw question UI if active
 				if self.question_ui.is_active():
 					self.question_ui.draw()
+					self.question_ui.update()  # Update chatbot UI
 
 				# player active
 				if game_over == 0:
