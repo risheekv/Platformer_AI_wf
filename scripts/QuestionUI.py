@@ -11,6 +11,9 @@ from Button import Button
 # Import scale factor from config
 from Config import SCALE_FACTOR
 
+# Import ChatbotUI
+from ChatbotUI import ChatbotUI
+
 class QuestionUI:
     def __init__(self, screen):
         self.screen = screen
@@ -30,6 +33,9 @@ class QuestionUI:
         self.animation_time = 0
         self.show_feedback = False
         self.feedback_message = ""
+        
+        # Initialize chatbot UI
+        self.chatbot_ui = ChatbotUI(screen)
         
         # Track asked questions
         self.asked_questions = set()
@@ -257,6 +263,16 @@ class QuestionUI:
         if not self.active or self.question_answered:
             return None
 
+        # Handle chatbot button
+        if self.chatbot_ui.draw_button():
+            self.chatbot_ui.show(self.current_question["question"])
+            return None
+
+        # Handle chatbot UI events
+        if self.chatbot_ui.is_active():
+            self.chatbot_ui.handle_events(event)
+            return None
+
         # Handle mouse movement for hover effect
         if event.type == pygame.MOUSEMOTION:
             for i, button in enumerate(self.buttons):
@@ -385,6 +401,11 @@ class QuestionUI:
                 self.reset()  # This will handle both unpausing and resetting
                 return
         
+        # Draw chatbot UI if active
+        if self.chatbot_ui.is_active():
+            self.chatbot_ui.draw()
+            return
+        
         # Smoothly fade in the overlay
         if self.overlay_alpha < 200:
             self.overlay_alpha = min(200, self.overlay_alpha + 40)
@@ -497,4 +518,8 @@ class QuestionUI:
             self.screen.blit(feedback_surface, (feedback_x, feedback_y))
 
     def set_game_paused(self, paused):
-        self.game_paused = paused 
+        self.game_paused = paused
+
+    def update(self):
+        # Update chatbot UI
+        self.chatbot_ui.update() 
