@@ -4,7 +4,7 @@ import time
 import os
 from pathlib import Path
 
-class TachyonService:
+class serviceAIService:
     def __init__(self):
         self.config = self._load_config()
         self.oauth_token = None
@@ -17,14 +17,14 @@ class TachyonService:
     def _load_config(self):
         """Load configuration from JSON file"""
         try:
-            config_path = Path(__file__).parent / 'tachyon_config.json'
+            config_path = Path(__file__).parent / 'serviceAI_config.json'
             with open(config_path, 'r') as f:
                 return json.load(f)['services']
         except Exception as e:
-            raise ValueError(f"Failed to load Tachyon configuration: {str(e)}")
+            raise ValueError(f"Failed to load serviceAI configuration: {str(e)}")
 
     def _get_oauth_token(self):
-        """Get OAuth token from Apigee with caching"""
+        """Get OAuth token from risheek with caching"""
         current_time = time.time()
         
         # Return existing token if it's still valid (with 5-minute buffer)
@@ -33,12 +33,12 @@ class TachyonService:
 
         try:
             auth = (
-                self.config['apigee']['consumer']['key'],
-                self.config['apigee']['consumer']['secret']
+                self.config['risheek']['consumer']['key'],
+                self.config['risheek']['consumer']['secret']
             )
             
             response = requests.post(
-                self.config['apigee']['oauth-url'],
+                self.config['risheek']['oauth-url'],
                 auth=auth,
                 data={'grant_type': 'client_credentials'},
                 headers={'Content-Type': 'application/x-www-form-urlencoded'},
@@ -62,7 +62,7 @@ class TachyonService:
             raise Exception(f"Error getting OAuth token: {str(e)}")
 
     def get_completion(self, messages, max_tokens=None):
-        """Get completion from Tachyon service"""
+        """Get completion from serviceAI service"""
         try:
             # Get fresh OAuth token
             token = self._get_oauth_token()
@@ -71,24 +71,24 @@ class TachyonService:
             headers = {
                 **self.headers,
                 'Authorization': f'Bearer {token}',
-                'x-api-key': self.config['tachyon']['api-key'],
-                'x-client-id': self.config['tachyon']['client-id'],
-                'x-usecase-id': self.config['tachyon']['usecase-id']
+                'x-api-key': self.config['serviceAI']['api-key'],
+                'x-client-id': self.config['serviceAI']['client-id'],
+                'x-usecase-id': self.config['serviceAI']['usecase-id']
             }
 
             # Prepare request payload
             payload = {
-                "model": self.config['tachyon']['model'],
+                "model": self.config['serviceAI']['model'],
                 "messages": messages,
-                "max_tokens": max_tokens or self.config['tachyon']['max_tokens'],
-                "temperature": self.config['tachyon']['temperature'],
-                "top_p": self.config['tachyon']['top_p'],
-                "stubs": self.config['tachyon']['stubs'].split(',')
+                "max_tokens": max_tokens or self.config['serviceAI']['max_tokens'],
+                "temperature": self.config['serviceAI']['temperature'],
+                "top_p": self.config['serviceAI']['top_p'],
+                "stubs": self.config['serviceAI']['stubs'].split(',')
             }
 
             # Make the API call with timeout
             response = requests.post(
-                self.config['tachyon']['chat-svc-endpoint'],
+                self.config['serviceAI']['chat-svc-endpoint'],
                 headers=headers,
                 json=payload,
                 timeout=30  # 30 second timeout
@@ -107,7 +107,7 @@ class TachyonService:
             raise Exception(f"Error getting completion: {str(e)}")
 
     def test_connection(self):
-        """Test the connection to Tachyon service"""
+        """Test the connection to serviceAI service"""
         try:
             # Try to get an OAuth token
             self._get_oauth_token()
