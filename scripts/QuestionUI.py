@@ -61,6 +61,9 @@ class QuestionUI:
         self.overlay = pygame.Surface((screen.get_width(), screen.get_height()))
         self.overlay.fill(self.colors['overlay'])
         
+        # Create Ask AI button
+        self.ask_ai_button = self.create_ask_ai_button()
+        
         # Create option buttons
         self.create_buttons()
         
@@ -70,126 +73,62 @@ class QuestionUI:
                 "question": "Why might a large company lease machinery instead of buying it outright?",
                 "options": ["To increase taxes", "To own it faster", "To reduce upfront costs and save cash", "To avoid training employees"],
                 "correct": 2,
-                "explanation": "Leasing machinery helps companies reduce upfront costs and conserve cash flow."
-            },
-            {
-                "question": "What is typically used as security in equipment financing?",
-                "options": ["Office rent agreement", "The equipment itself", "Employee contracts", "Company logo"],
-                "correct": 1,
-                "explanation": "The equipment being financed is typically used as security for the loan."
-            },
-            {
-                "question": "Which of these is an example of something a company might finance with an equipment loan?",
-                "options": ["Mobile apps", "Office snacks", "Industrial machines", "Manager salaries"],
-                "correct": 2,
-                "explanation": "Industrial machines are common examples of equipment that companies finance."
+                "explanation": "Leasing machinery helps companies reduce upfront costs and conserve cash flow.",
+                "image_path": "sprites/questions/lease_machinery.png"
             },
             {
                 "question": "What is one major benefit of leasing equipment instead of buying it?",
                 "options": ["You can return it after each use", "Lower maintenance fees", "No need for insurance", "Use now, pay over time"],
                 "correct": 3,
-                "explanation": "Leasing allows companies to use equipment immediately while spreading the cost over time."
-            },
-            {
-                "question": "Which type of business is most likely to use equipment financing?",
-                "options": ["Freelance blogger", "Heavy construction company", "Local pizza delivery service", "Online clothing reseller"],
-                "correct": 1,
-                "explanation": "Heavy construction companies often need expensive equipment and use financing to acquire it."
+                "explanation": "Leasing allows companies to use equipment immediately while spreading the cost over time.",
+                "image_path": "sprites/questions/leasing_benefit.png"
             },
             {
                 "question": "Leasing equipment is often preferred by businesses because:",
                 "options": ["It comes with free upgrades", "It requires no legal contracts", "It frees up money for other investments", "It removes the need for employees"],
                 "correct": 2,
-                "explanation": "Leasing frees up capital that can be used for other business investments."
-            },
-            {
-                "question": "What happens to the equipment at the end of a lease?",
-                "options": ["It disappears", "The company usually returns or buys it", "It turns into a gift", "It is shared with competitors"],
-                "correct": 1,
-                "explanation": "At the end of a lease, companies typically have the option to return the equipment or purchase it."
+                "explanation": "Leasing frees up capital that can be used for other business investments.",
+                "image_path": "sprites/questions/leasing_preference.png"
             },
             {
                 "question": "What does a company usually offer as security when taking a loan backed by assets?",
                 "options": ["Its future ideas", "Inventory or unpaid customer invoices", "Social media followers", "Office snacks"],
                 "correct": 1,
-                "explanation": "Companies typically use inventory or accounts receivable as security for asset-backed loans."
+                "explanation": "Companies typically use inventory or accounts receivable as security for asset-backed loans.",
+                "image_path": "sprites/questions/asset_security.png"
             },
             {
                 "question": "Why would a business use a loan backed by its assets?",
                 "options": ["To buy shares in other companies", "To get quick access to money without selling ownership", "To shut down operations", "To pay employee bonuses only"],
                 "correct": 1,
-                "explanation": "Asset-backed loans provide quick access to capital without giving up company ownership."
-            },
-            {
-                "question": "If a company doesn't have much cash but has many unpaid customer invoices, what can it do?",
-                "options": ["Sell the business", "Ignore the situation", "Use those invoices to get a loan", "Change the company name"],
-                "correct": 2,
-                "explanation": "Companies can use unpaid invoices (accounts receivable) as collateral for financing."
+                "explanation": "Asset-backed loans provide quick access to capital without giving up company ownership.",
+                "image_path": "sprites/questions/asset_loan.png"
             },
             {
                 "question": "What kind of assets can help a company get a business loan?",
                 "options": ["Office pets", "Furniture only", "Equipment, inventory, or customer payments due", "Company name"],
                 "correct": 2,
-                "explanation": "Tangible assets like equipment, inventory, and accounts receivable can be used as collateral."
+                "explanation": "Tangible assets like equipment, inventory, and accounts receivable can be used as collateral.",
+                "image_path": "sprites/questions/business_assets.png"
             },
             {
                 "question": "Why would a company choose a loan secured by assets instead of a regular loan?",
                 "options": ["Easier to qualify if the company owns valuable stuff", "It always comes with free gadgets", "It doesn't need to be repaid", "It avoids any paperwork"],
                 "correct": 0,
-                "explanation": "Asset-secured loans are often easier to qualify for if the company has valuable assets."
+                "explanation": "Asset-secured loans are often easier to qualify for if the company has valuable assets.",
+                "image_path": "sprites/questions/asset_secured_loan.png"
             },
-            {
-                "question": "A business with a lot of unsold inventory might use that inventory to:",
-                "options": ["Start a loyalty program", "Launch an IPO", "Get a loan to manage cash flow", "Close for the season"],
-                "correct": 2,
-                "explanation": "Inventory can be used as collateral to secure financing for cash flow management."
-            },
-            {
-                "question": "What happens if a business fails to repay a loan secured by assets?",
-                "options": ["The loan disappears", "The lender may take the pledged assets", "The government pays the loan", "The company gets more credit"],
-                "correct": 1,
-                "explanation": "If a loan is not repaid, the lender has the right to seize the pledged assets."
-            },
-            {
-                "question": "Why do large companies use letters of credit when trading with other countries?",
-                "options": ["To advertise faster", "To ensure safe and guaranteed payment", "To get frequent flyer points", "To skip customs"],
-                "correct": 1,
-                "explanation": "Letters of credit provide payment security in international trade transactions."
-            },
-            {
-                "question": "If a company is waiting for payment from a foreign customer, how can it improve its cash flow?",
-                "options": ["Pause all business", "Take a loan using that pending payment", "Buy stocks", "Start paying interest to the customer"],
-                "correct": 1,
-                "explanation": "Companies can use pending foreign payments as collateral for financing to improve cash flow."
-            },
-            {
-                "question": "In international trade, which problem does a letter of credit help solve?",
-                "options": ["Language barriers", "Late shipping", "Trust between buyer and seller", "Packaging issues"],
-                "correct": 2,
-                "explanation": "Letters of credit help establish trust between international trading partners."
-            },
-            {
-                "question": "A company that sells goods to buyers in different countries might need trade finance to:",
-                "options": ["Post on social media", "Track employee attendance", "Manage shipping and payment delays", "Buy food for team lunches"],
-                "correct": 2,
-                "explanation": "Trade finance helps companies manage the delays between shipping and receiving payment."
-            },
-            {
-                "question": "One reason big companies use trade finance is to:",
-                "options": ["Win awards", "Boost employee morale", "Reduce risks in global transactions", "Change currencies instantly"],
-                "correct": 2,
-                "explanation": "Trade finance helps reduce risks associated with international transactions."
-            },
-            {
-                "question": "What's a benefit of using receivables finance in international trade?",
-                "options": ["Hire influencers", "Access money faster without waiting for customers to pay", "Reduce inventory size", "Send gifts to buyers"],
-                "correct": 1,
-                "explanation": "Receivables finance allows companies to access funds before customers pay their invoices."
-            }
+            
         ]
         
         # Initialize available questions
         self.reset_available_questions()
+        
+        self.showing_ai_image = False
+        self.ai_image = None
+        self.ai_image_rect = None
+        self.back_button = self.create_back_button()
+        self.ask_ai_clicked = False
     
     def create_gradient_surface(self, width, height, start_color, end_color, angle=0):
         surface = pygame.Surface((width, height))
@@ -254,6 +193,13 @@ class QuestionUI:
         self.asked_questions.add(question_index)
     
     def handle_events(self, event):
+        if self.showing_ai_image:
+            if event.type == pygame.MOUSEBUTTONDOWN:
+                if self.back_button.rect.collidepoint(event.pos):
+                    self.showing_ai_image = False
+                    print("Back button clicked, returning to question view.")
+                    return None
+            return None
         if not self.active or self.question_answered:
             return None
 
@@ -265,6 +211,32 @@ class QuestionUI:
                     break
             else:
                 self.hover_index = -1
+
+        # Handle mouse clicks
+        if event.type == pygame.MOUSEBUTTONDOWN:
+            # Check if Ask AI button was clicked
+            if self.ask_ai_button.rect.collidepoint(event.pos) and not self.ask_ai_clicked:
+                self.showing_ai_image = True
+                self.load_ai_image()
+                self.ask_ai_clicked = True
+                print("Ask AI button clicked, showing image view.")
+                return None
+
+            # Handle option button clicks
+            for i, button in enumerate(self.buttons):
+                if button.rect.collidepoint(event.pos):
+                    self.selected_option = i
+                    self.question_answered = True
+                    self.show_feedback = True
+                    self.feedback_timer = 60  # 1 second delay at 60 FPS
+                    self.feedback_alpha = 0
+                    # Set feedback message immediately
+                    if i == self.correct_answer:
+                        self.feedback_message = "🎉 Correct! " + self.current_question["explanation"]
+                        return (True, self.ask_ai_clicked)
+                    else:
+                        self.feedback_message = f"❌ Incorrect! The correct answer was: {self.current_question['options'][self.correct_answer]}"
+                        return (False, self.ask_ai_clicked)
 
         # Handle keyboard navigation
         if event.type == pygame.KEYDOWN:
@@ -281,24 +253,11 @@ class QuestionUI:
                 # Set feedback message immediately
                 if self.hover_index == self.correct_answer:
                     self.feedback_message = "🎉 Correct! " + self.current_question["explanation"]
+                    return (True, self.ask_ai_clicked)
                 else:
                     self.feedback_message = f"❌ Incorrect! The correct answer was: {self.current_question['options'][self.correct_answer]}"
-                return self.hover_index == self.correct_answer
+                    return (False, self.ask_ai_clicked)
 
-        if event.type == pygame.MOUSEBUTTONDOWN:
-            for i, button in enumerate(self.buttons):
-                if button.rect.collidepoint(event.pos):
-                    self.selected_option = i
-                    self.question_answered = True
-                    self.show_feedback = True
-                    self.feedback_timer = 60  # 1 second delay at 60 FPS
-                    self.feedback_alpha = 0
-                    # Set feedback message immediately
-                    if i == self.correct_answer:
-                        self.feedback_message = "🎉 Correct! " + self.current_question["explanation"]
-                    else:
-                        self.feedback_message = f"❌ Incorrect! The correct answer was: {self.current_question['options'][self.correct_answer]}"
-                    return i == self.correct_answer
         return None
     
     def is_active(self):
@@ -313,17 +272,13 @@ class QuestionUI:
             self.question_answered = True
             self.show_feedback = True
             self.feedback_timer = 60  # 1 second delay at 60 FPS
-            
             if selected_option == self.current_question['correct']:
                 self.feedback_message = "🎉 Correct! " + self.current_question["explanation"]
-                global points
-                points += 5
+                return (True, self.ask_ai_clicked)
             else:
                 self.feedback_message = f"❌ Incorrect! The correct answer was: {self.current_question['options'][self.correct_answer]}"
-            
-            self.feedback_alpha = 0
-            return selected_option == self.current_question['correct']
-        return False
+                return (False, self.ask_ai_clicked)
+        return (False, self.ask_ai_clicked)
     
     def reset(self):
         # First unpause the game
@@ -340,6 +295,7 @@ class QuestionUI:
         self.feedback_timer = 0
         self.overlay_alpha = 0
         self.hover_index = -1
+        self.ask_ai_clicked = False
     
     def wrap_text(self, text, font, max_width):
         """Wrap text to fit within max_width"""
@@ -364,7 +320,101 @@ class QuestionUI:
             
         return lines
 
+    def create_ask_ai_button(self):
+        # Create a surface for the button
+        button_width = int(120 * SCALE_FACTOR)
+        button_height = int(40 * SCALE_FACTOR)
+        button_surface = pygame.Surface((button_width, button_height))
+        
+        # Create gradient background
+        gradient = self.create_gradient_surface(
+            button_width, button_height,
+            self.colors['gradient_start'],
+            self.colors['gradient_end']
+        )
+        button_surface.blit(gradient, (0, 0))
+        
+        # Add border
+        pygame.draw.rect(button_surface, self.colors['border'], button_surface.get_rect(), 2)
+        
+        # Add text
+        text = self.font.render("Ask AI", True, self.colors['text'])
+        text_rect = text.get_rect(center=(button_width//2, button_height//2))
+        button_surface.blit(text, text_rect)
+        
+        # Create button and position it in top right corner
+        button = Button(0, 0, button_surface)  # Initial position, will be updated in draw
+        return button
+
+    def create_back_button(self):
+        button_width = int(100 * SCALE_FACTOR)
+        button_height = int(40 * SCALE_FACTOR)
+        button_surface = pygame.Surface((button_width, button_height))
+        gradient = self.create_gradient_surface(
+            button_width, button_height,
+            self.colors['gradient_start'],
+            self.colors['gradient_end']
+        )
+        button_surface.blit(gradient, (0, 0))
+        pygame.draw.rect(button_surface, self.colors['border'], button_surface.get_rect(), 2)
+        text = self.font.render("Back", True, self.colors['text'])
+        text_rect = text.get_rect(center=(button_width//2, button_height//2))
+        button_surface.blit(text, text_rect)
+        button = Button(0, 0, button_surface)
+        return button
+
+    def load_ai_image(self):
+        if self.current_question and self.current_question.get('image_path'):
+            image_path = self.current_question['image_path']
+            print(f"Attempting to load image from: {image_path}")
+            if not os.path.exists(image_path):
+                print(f"Error: Image file does not exist at {image_path}")
+                return
+            try:
+                img = pygame.image.load(image_path)
+                # Scale image to fit screen while maintaining aspect ratio
+                screen_width = self.screen.get_width()
+                screen_height = self.screen.get_height()
+                img_width = img.get_width()
+                img_height = img.get_height()
+                scale = min(screen_width / img_width, screen_height / img_height) * 0.8
+                new_width = int(img_width * scale)
+                new_height = int(img_height * scale)
+                img = pygame.transform.scale(img, (new_width, new_height))
+                self.ai_image = img
+                self.ai_image_rect = img.get_rect(center=(screen_width // 2, screen_height // 2))
+                print(f"Successfully loaded image: {image_path}, size: {img.get_width()}x{img.get_height()}")
+            except Exception as e:
+                print(f"Error loading image: {self.current_question['image_path']}")
+                print(f"Exception: {str(e)}")
+
     def draw(self):
+        if self.showing_ai_image:
+            # Draw overlay
+            if self.overlay_alpha < 200:
+                self.overlay_alpha = min(200, self.overlay_alpha + 40)
+            self.overlay.set_alpha(self.overlay_alpha)
+            self.screen.blit(self.overlay, (0, 0))
+            # Determine image size and position
+            if self.ai_image and self.ai_image_rect:
+                img_w, img_h = self.ai_image_rect.width, self.ai_image_rect.height
+            else:
+                img_w, img_h = max(int(self.screen.get_width() * 0.7), int(500 * SCALE_FACTOR)), max(int(self.screen.get_height() * 0.7), int(375 * SCALE_FACTOR))
+            img_x = (self.screen.get_width() - img_w) // 2
+            img_y = (self.screen.get_height() - img_h) // 2
+            rect = pygame.Rect(img_x, img_y, img_w, img_h)
+            pygame.draw.rect(self.screen, self.colors['border'], rect, 6)
+            if self.ai_image:
+                self.screen.blit(self.ai_image, (img_x, img_y))
+            else:
+                # Draw placeholder if image missing
+                placeholder = self.font.render("No Image Available", True, (200, 50, 50))
+                ph_rect = placeholder.get_rect(center=(self.screen.get_width()//2, self.screen.get_height()//2))
+                self.screen.blit(placeholder, ph_rect)
+            # Draw Back button below image
+            self.back_button.rect.topleft = (img_x + img_w//2 - self.back_button.rect.width//2, img_y + img_h + int(30 * SCALE_FACTOR))
+            self.back_button.draw(self.screen)
+            return
         if not self.active or self.current_question is None:
             return
             
@@ -390,6 +440,13 @@ class QuestionUI:
             self.overlay_alpha = min(200, self.overlay_alpha + 40)
         self.overlay.set_alpha(self.overlay_alpha)
         self.screen.blit(self.overlay, (0, 0))
+        
+        # Position Ask AI button in top right corner of game window
+        self.ask_ai_button.rect.topleft = (
+            self.screen.get_width() - self.ask_ai_button.rect.width - int(20 * SCALE_FACTOR),
+            int(20 * SCALE_FACTOR)
+        )
+        self.ask_ai_button.draw(self.screen)
         
         # Draw question box
         question_lines = self.wrap_text(self.current_question["question"], self.title_font, int(700 * SCALE_FACTOR))

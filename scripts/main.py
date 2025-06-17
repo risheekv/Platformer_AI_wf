@@ -36,6 +36,7 @@ current_level = 0				# level counter
 max_levels = 2					# number of game levels (0 indexed)
 score_count = 0					# coin score count
 points = 0                      # points for correct answers
+POINTS_THRESHOLD = 20           # minimum points needed to progress
 
 	# --> Sounds
 pygame.mixer.pre_init(44100, -16, 2, 512)
@@ -659,6 +660,7 @@ class Game():
 		self.question_ui = QuestionUI(screen)  # Initialize question UI
 		self.score_font = pygame.font.SysFont('comicsansms', int(25 * SCALE_FACTOR))  # Scaled font size
 		self.timer_started = False  # New flag to track if timer has started
+		self.insufficient_points = False  # Flag to track if player has insufficient points
 		self.start()
 
 	# setup in-game menu
@@ -828,21 +830,27 @@ class Game():
 				# player finished level
 				if game_over == 1:
 					self.timer_counter = 0
-					if current_level == 0:
-						current_level = 2  # Skip level 1 (index 1) and go directly to level 3 (index 2)
-					else:
-						current_level += 1
-					values = self.load_level()
-					player = values[0]
-					world = values[1]
-					chaser = values[2]
+					# Check if player has enough points to progress
+					if points >= POINTS_THRESHOLD:
+						if current_level == 0:
+							current_level = 2  # Skip level 1 (index 1) and go directly to level 3 (index 2)
+						else:
+							current_level += 1
+						values = self.load_level()
+						player = values[0]
+						world = values[1]
+						chaser = values[2]
 
-					if current_level > max_levels:
-						game_finished = True
+						if current_level > max_levels:
+							game_finished = True
+						else:
+							self.game_timer()
 					else:
-						self.game_timer()
+						# Show insufficient points message
+						self.insufficient_points = True
+						game_over = -1  # Treat as game over
 
-				# player death
+				# player death or insufficient points
 				if game_over == -1:
 					self.timer_counter = 0
 					self.timer_started = False  # Reset timer started flag
@@ -851,13 +859,22 @@ class Game():
 					title_font = pygame.font.SysFont('comicsansms', 50)
 					subtitle_font = pygame.font.SysFont('comicsansms', 30)
 					
-					# Main title
-					title = title_font.render("Game Over!", True, (255, 0, 0))
-					title_rect = title.get_rect(center=(screen_width//2, screen_height//2 - 100))
-					
-					# Score message
-					score_text = subtitle_font.render(f"Total Score: {points}", True, (255, 255, 255))
-					score_rect = score_text.get_rect(center=(screen_width//2, screen_height//2 - 30))
+					if self.insufficient_points:
+						# Main title for insufficient points
+						title = title_font.render("Better Luck Next Time!", True, (255, 0, 0))
+						title_rect = title.get_rect(center=(screen_width//2, screen_height//2 - 100))
+						
+						# Score message
+						score_text = subtitle_font.render(f"Points Required: {POINTS_THRESHOLD}, Your Score: {points}", True, (255, 255, 255))
+						score_rect = score_text.get_rect(center=(screen_width//2, screen_height//2 - 30))
+					else:
+						# Regular game over message
+						title = title_font.render("Game Over!", True, (255, 0, 0))
+						title_rect = title.get_rect(center=(screen_width//2, screen_height//2 - 100))
+						
+						# Score message
+						score_text = subtitle_font.render(f"Total Score: {points}", True, (255, 255, 255))
+						score_rect = score_text.get_rect(center=(screen_width//2, screen_height//2 - 30))
 					
 					# Draw the messages
 					screen.blit(title, title_rect)
@@ -870,6 +887,7 @@ class Game():
 						chaser = values[2]
 						self.game_timer()
 						self.timer_started = True  # Mark timer as started
+						self.insufficient_points = False  # Reset insufficient points flag
 					if self.quit_button.draw(screen):
 						run = False
 
@@ -904,9 +922,10 @@ class Game():
 				if self.question_ui.is_active():
 					result = self.question_ui.handle_events(event)
 					if result is not None:
+						is_correct, used_ask_ai = result
 						# Question was answered, check if correct
-						if result:  # If answer was correct
-							points += 5  # Add 5 points for correct answer
+						if is_correct:
+							points += 3 if used_ask_ai else 5
 						# Don't reset or unpause here - let QuestionUI handle the delay
 						# The game will automatically unpause when QuestionUI is done
 
