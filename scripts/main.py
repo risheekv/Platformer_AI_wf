@@ -553,18 +553,16 @@ class Character():
 			dx = key[0]
 			dy = key[1]
 
-			# Only process movement and animations if not paused
+			# Process animations regardless of pause state
+			if self.animation == "idle":
+				self.idle_animation()
+			elif self.animation == "jump":
+				self.jump_animation()
+			elif self.animation == "run":
+				self.run_animation()
+
+			# Only process movement and physics if not paused
 			if not game_paused:
-				# animation handling
-				if self.animation == "idle":
-					self.idle_animation()
-
-				if self.animation == "jump":
-					self.jump_animation()
-
-				if self.animation == "run":
-					self.run_animation()
-
 				# add gravity
 				self.vel_y += 1
 				if self.vel_y > 10:
@@ -660,6 +658,7 @@ class Game():
 		self.game_menu()
 		self.question_ui = QuestionUI(screen)  # Initialize question UI
 		self.score_font = pygame.font.SysFont('comicsansms', int(25 * SCALE_FACTOR))  # Scaled font size
+		self.timer_started = False  # New flag to track if timer has started
 		self.start()
 
 	# setup in-game menu
@@ -737,6 +736,8 @@ class Game():
 		if hasattr(self, 'chaser'):
 			self.chaser.start_time = pygame.time.get_ticks()
 			self.chaser.is_active = False
+			self.chaser.paused_time = 0  # Reset paused time
+			self.chaser.last_pause_time = 0  # Reset last pause time
 
 	# start game functionality
 	def start(self):
@@ -751,7 +752,7 @@ class Game():
 		world = World()
 		player = Character(0, screen_height - 130)
 		chaser = Chaser(0, screen_height - 130)
-		self.game_timer()
+		self.chaser = chaser  # Store chaser reference
 
 		run = True
 		while(run):
@@ -768,6 +769,8 @@ class Game():
 				if self.play_button.draw(screen):
 					in_menu = False
 					points = 0  # Reset points when starting new game
+					self.game_timer()  # Start timer only after play button is clicked
+					self.timer_started = True  # Mark timer as started
 			else:
 				world.draw_tiles()
 				check_points[0].draw(screen)
@@ -782,14 +785,16 @@ class Game():
 				# Update chaser with current pause state
 				chaser.update(player, self.question_ui.is_game_paused())
 				
-				# Only update other game elements if not paused
+				# Only update game elements if not paused
 				if not self.question_ui.is_game_paused():
+					# Update platforms only when not paused
 					plats[0].update()
 					chaser.draw(screen)
 					
-					# Draw timer and score if game is not paused
-					screen.blit(self.timer_font.render(self.timer_text, True, (47, 48, 29)), (60, 42))
-					screen.blit(self.score_font.render(f"Score: {points}", True, (47, 48, 29)), (screen_width - 150, 42))
+					# Draw timer and score if game is not paused and timer has started
+					if self.timer_started:
+						screen.blit(self.timer_font.render(self.timer_text, True, (47, 48, 29)), (60, 42))
+						screen.blit(self.score_font.render(f"Score: {points}", True, (47, 48, 29)), (screen_width - 150, 42))
 					
 					# Check for collision between player and chaser
 					if chaser.rect.colliderect(player.rect):
@@ -840,6 +845,7 @@ class Game():
 				# player death
 				if game_over == -1:
 					self.timer_counter = 0
+					self.timer_started = False  # Reset timer started flag
 					
 					# Draw game over message and score
 					title_font = pygame.font.SysFont('comicsansms', 50)
@@ -863,12 +869,14 @@ class Game():
 						world = values[1]
 						chaser = values[2]
 						self.game_timer()
+						self.timer_started = True  # Mark timer as started
 					if self.quit_button.draw(screen):
 						run = False
 
 				# player won
 				if game_finished:
 					self.timer_counter = 0
+					self.timer_started = False  # Reset timer started flag
 					# Draw congratulatory message
 					title_font = pygame.font.SysFont('comicsansms', 50)
 					subtitle_font = pygame.font.SysFont('comicsansms', 30)
@@ -902,8 +910,8 @@ class Game():
 						# Don't reset or unpause here - let QuestionUI handle the delay
 						# The game will automatically unpause when QuestionUI is done
 
-				# game timer
-				if event.type == pygame.USEREVENT and not self.question_ui.is_game_paused():
+				# game timer - only process if timer has started
+				if event.type == pygame.USEREVENT and self.timer_started and not self.question_ui.is_game_paused():
 					self.timer_counter -= 1
 					if self.timer_counter > 0:
 						self.timer_text = str(self.timer_counter).rjust(3)
