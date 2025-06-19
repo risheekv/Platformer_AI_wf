@@ -1,6 +1,8 @@
-# ------------ imports ------------
 import Config
 import Levels
+from Button import Button
+from QuestionUI import QuestionUI
+from Config import SCALE_FACTOR
 
 import random
 import pygame
@@ -13,13 +15,14 @@ import json
 import os
 import traceback  # Add traceback for better error reporting
 import tensorflow as tf
+import sys
 
 # ------------ Globals ------------
 
 # dimensions: 18 x 20
-screen_width = 1000 			# screen width
-screen_height = 900 			# screen height
-tile_size = 50				# tile size
+screen_width = int(1000 * SCALE_FACTOR) 			# screen width
+screen_height = int(900 * SCALE_FACTOR) 			# screen height
+tile_size = int(50 * SCALE_FACTOR)				# tile size
 world_tiles = []				# first layer
 
 pygame.init()
@@ -30,51 +33,18 @@ in_menu = True
 game_finished = False
 game_over = 0 					# Game-Over flag
 current_level = 0				# level counter
-max_levels = 3					# number of game levels (0 indexed)
+max_levels = 2					# number of game levels (0 indexed)
 score_count = 0					# coin score count
+points = 0                      # points for correct answers
+POINTS_THRESHOLD = 20           # minimum points needed to progress
 
 	# --> Sounds
 pygame.mixer.pre_init(44100, -16, 2, 512)
 mixer.init()
 
-sounds = []
-menu_sound = False
-game_sound = False
-
 plats = []			# group of platforms
 check_points = []	# group of checkpoints
 lava_tiles = []		# group of lava tiles
-
-# -----------------------------------------------------------------------------------------------------------
-
-class Button():
-	def __init__(self, x, y, image):
-		self.image = image
-		self.rect = self.image.get_rect()
-		self.rect.x = x
-		self.rect.y = y
-		self.clicked = False
-
-	def draw(self):
-		action = False
-
-		# get mouse position
-		pos = pygame.mouse.get_pos()
-
-		# check mouseover and clicked conditions
-		if self.rect.collidepoint(pos):
-			if pygame.mouse.get_pressed()[0] == 1 and self.clicked == False:
-				action = True
-				self.clicked = True
-
-		if pygame.mouse.get_pressed()[0] == 0:
-			self.clicked = False
-
-
-		# draw button
-		screen.blit(self.image, self.rect)
-
-		return action
 
 # -----------------------------------------------------------------------------------------------------------
 
@@ -116,9 +86,11 @@ class Platform(pygame.sprite.Sprite):
 
 		self.move_x = move_x # flag to move in x direction
 		self.move_y = move_y # flag to move in y direction
+		self.question_shown = False  # Flag to track if question has been shown
 
 	# handle platform movement
 	def update(self):
+		# Original movement speed without any multiplier
 		self.rect.x += self.move_direction * self.move_x
 		self.rect.y += self.move_direction * self.move_y
 		self.move_counter += 1
@@ -126,6 +98,10 @@ class Platform(pygame.sprite.Sprite):
 		if abs(self.move_counter) > 50:
 			self.move_direction *= -1
 			self.move_counter *= -1
+
+	# Draw the platform
+	def draw(self, screen):
+		screen.blit(self.image, self.rect)
 
 # -----------------------------------------------------------------------------------------------------------
 
@@ -185,7 +161,7 @@ class World():
 
 	# Initialize game tiles
 	def initialize_tiles(self):
-		global platforms
+		global plats
 		global check_points
 		global environmentals
 		global world_tiles
@@ -450,11 +426,13 @@ class Character():
 
 
 	# handle key presses
-	def controller(self, dx, dy):
-		global sounds
-
+	def controller(self, dx, dy, game_paused=False):
 		value = []
 		key = pygame.key.get_pressed()
+
+		# If game is paused, don't process any movement
+		if game_paused:
+			return [0, 0]
 
 		# currently idle
 		if not key[pygame.K_w] or not key[pygame.K_a] or not key[pygame.K_d]:
@@ -463,25 +441,24 @@ class Character():
 
 		# currently jumping
 		if key[pygame.K_w] and self.jumped == False and self.in_air == False:
-			self.vel_y = -14 # jump height
+			self.vel_y = -15 * SCALE_FACTOR  # Scaled jump height
 			self.jumped = True
 			self.counter += 1
 			self.animation = "jump"
-			sounds[1].play()
 
 		if key[pygame.K_w] == False:
 			self.jumped = False
 
 		# currently running right
 		if key[pygame.K_d]:
-			dx += 5
+			dx += 5 * SCALE_FACTOR  # Scaled movement speed
 			self.counter += 1
 			self.direction = 1
 			self.animation = "run"
 
 		# currently running left
 		if key[pygame.K_a]:
-			dx -= 5
+			dx -= 5 * SCALE_FACTOR  # Scaled movement speed
 			self.counter += 1
 			self.direction = -1
 			self.animation = "run"
@@ -566,46 +543,46 @@ class Character():
 		pygame.draw.rect(screen, (179, 29, 18), self.rect, 2)
 
 	# handle the player
-	def draw_player(self):
+	def draw_player(self, game_paused=False):
 		global game_over
 		dx = 0
 		dy = 0
 
 		if game_over == 0:
-			# input handler
-			key = self.controller(dx, dy)
+			# input handler - pass game_paused state
+			key = self.controller(dx, dy, game_paused)
 			dx = key[0]
 			dy = key[1]
 
-			# animation handling
+			# Process animations regardless of pause state
 			if self.animation == "idle":
 				self.idle_animation()
-
-			if self.animation == "jump":
+			elif self.animation == "jump":
 				self.jump_animation()
-
-			if self.animation == "run":
+			elif self.animation == "run":
 				self.run_animation()
 
-			# add gravity
-			self.vel_y += 1
-			if self.vel_y > 10:
-				self.vel_y = 10
-			dy += self.vel_y
+			# Only process movement and physics if not paused
+			if not game_paused:
+				# add gravity
+				self.vel_y += 1
+				if self.vel_y > 10:
+					self.vel_y = 10
+				dy += self.vel_y
 
-			# check for collision
-			col = self.collision(dx, dy)
-			dx = col[0]
-			dy = col[1]
+				# check for collision
+				col = self.collision(dx, dy)
+				dx = col[0]
+				dy = col[1]
 
-			# handle out of bounds
-			if self.rect.x + dx >= -25 and self.rect.x + dx <= 977:
-				self.rect.x += dx
+				# handle out of bounds
+				if self.rect.x + dx >= -25 and self.rect.x + dx <= 977:
+					self.rect.x += dx
 
-			if self.rect.y + dy >= 1000:
-				game_over = -1
-			else:
-				self.rect.y += dy
+				if self.rect.y + dy >= 1000:
+					game_over = -1
+				else:
+					self.rect.y += dy
 
 		screen.blit(self.image, self.rect)
 
@@ -615,53 +592,59 @@ class Chaser(pygame.sprite.Sprite):
 	def __init__(self, x, y):
 		pygame.sprite.Sprite.__init__(self)
 		img = pygame.image.load(Config.Sprites["bird"])
-		self.image = pygame.transform.scale(img, (40, 40))
+		self.image = pygame.transform.scale(img, (int(40 * SCALE_FACTOR), int(40 * SCALE_FACTOR)))
 		self.rect = self.image.get_rect()
 		self.rect.x = x
 		self.rect.y = y
-		self.base_speed = 0.6  # Base speed
+		self.base_speed = 0.6 * SCALE_FACTOR  # Scaled base speed
 		self.speed = self.base_speed  # Current speed
 		self.model = tf.keras.models.load_model('chaser_model.h5') if os.path.exists('chaser_model.h5') else None
 		self.buffer = []
 		self.max_buffer_size = 1000
 		self.training_enabled = False  # Disable training during gameplay
 		self.start_time = pygame.time.get_ticks()  # Record start time
-		self.delay = 5000  # 5 seconds delay in milliseconds
+		self.delay = 8000  # 8 seconds delay in milliseconds
 		self.is_active = False  # Flag to track if chaser is active
+		self.paused_time = 0  # Track time spent paused
+		self.last_pause_time = 0  # Track when we last paused
 
-	def update(self, player):
-		# Check if delay period has passed
+	def update(self, player, game_paused=False):
 		current_time = pygame.time.get_ticks()
-		if not self.is_active and current_time - self.start_time >= self.delay:
+		
+		# If game is paused by question, don't count this time
+		if game_paused:
+			if self.last_pause_time == 0:  # Just entered pause state
+				self.last_pause_time = current_time
+			return  # Don't process movement while paused
+		else:
+			if self.last_pause_time != 0:  # Just exited pause state
+				self.paused_time += current_time - self.last_pause_time
+				self.last_pause_time = 0
+
+		# Only check activation if not paused
+		if not self.is_active and (current_time - self.start_time - self.paused_time) >= self.delay:
 			self.is_active = True
-			# Increase speed based on level
-			self.speed = self.base_speed * (1 + current_level * 0.2)  # 20% speed increase per level
+			self.speed = self.base_speed * (1 + current_level * 0.16)
 
 		# Only move if active
 		if self.is_active:
-			# Get current state
 			dx = player.rect.x - self.rect.x
 			dy = player.rect.y - self.rect.y
 			
-			# Normalize the direction
 			distance = max(abs(dx), abs(dy))
 			if distance > 0:
 				dx = dx / distance
 				dy = dy / distance
 			
-			# If model exists, use it for movement
 			if self.model is not None:
 				state = np.array([[dx, dy, distance]])
 				action = self.model.predict(state, verbose=0)[0]
-				
-				# Apply the predicted movement
 				self.rect.x += action[0] * self.speed
 				self.rect.y += action[1] * self.speed
 			else:
-				# Fallback to simple chase behavior
 				self.rect.x += dx * self.speed
 				self.rect.y += dy * self.speed
-	
+
 	def draw(self, screen):
 		screen.blit(self.image, self.rect)
 
@@ -671,9 +654,13 @@ class Game():
 	def __init__(self):
 		pygame.mixer.pre_init(44100, -16, 2, 512)
 		mixer.init()
-		self.fps = 60
+		self.fps = 60  # Fixed FPS at 60
 		self.clock = pygame.time.Clock()
 		self.game_menu()
+		self.question_ui = QuestionUI(screen)  # Initialize question UI
+		self.score_font = pygame.font.SysFont('comicsansms', int(25 * SCALE_FACTOR))  # Scaled font size
+		self.timer_started = False  # New flag to track if timer has started
+		self.insufficient_points = False  # Flag to track if player has insufficient points
 		self.start()
 
 	# setup in-game menu
@@ -683,38 +670,15 @@ class Game():
 		continue_img = pygame.image.load(Config.UI["continue"])
 		resume_img = pygame.image.load(Config.UI["resume"])
 
-		play_img = pygame.transform.scale(play_img, (200, 70))
-		quit_img = pygame.transform.scale(quit_img, (200, 70))
-		continue_img = pygame.transform.scale(continue_img, (200, 70))
-		resume_img = pygame.transform.scale(resume_img, (200, 70))
+		play_img = pygame.transform.scale(play_img, (int(200 * SCALE_FACTOR), int(70 * SCALE_FACTOR)))
+		quit_img = pygame.transform.scale(quit_img, (int(200 * SCALE_FACTOR), int(70 * SCALE_FACTOR)))
+		continue_img = pygame.transform.scale(continue_img, (int(200 * SCALE_FACTOR), int(70 * SCALE_FACTOR)))
+		resume_img = pygame.transform.scale(resume_img, (int(200 * SCALE_FACTOR), int(70 * SCALE_FACTOR)))
 
-		self.play_button = Button(screen_width // 2 - 100, screen_height // 2, play_img)
-		self.quit_button = Button(screen_width // 2 - 100, screen_height // 2 + 110, quit_img)
-		self.continue_button = Button(screen_width // 2 - 100, screen_height // 2, continue_img)
-		self.resume_button = Button(screen_width // 2 - 100, screen_height // 2, resume_img)
-
-	# load sounds
-	def sounds(self):
-		global sounds
-
-		theme_fx = pygame.mixer.Sound(Config.Sounds["theme"])
-		theme_fx.set_volume(0.5)
-
-		jump_fx = pygame.mixer.Sound(Config.Sounds["jump"])
-		jump_fx.set_volume(0.5)
-
-		over_fx = pygame.mixer.Sound(Config.Sounds["over"])
-		over_fx.set_volume(0.5)
-
-		complete_fx = pygame.mixer.Sound(Config.Sounds["complete"])
-		complete_fx.set_volume(0.5)
-
-		sounds.append(theme_fx)
-		sounds.append(jump_fx)
-		sounds.append(over_fx)
-		sounds.append(complete_fx)
-
-		sounds[0].play(-1) # loop game theme
+		self.play_button = Button(screen_width // 2 - int(100 * SCALE_FACTOR), screen_height // 2, play_img)
+		self.quit_button = Button(screen_width // 2 - int(100 * SCALE_FACTOR), screen_height // 2 + int(110 * SCALE_FACTOR), quit_img)
+		self.continue_button = Button(screen_width // 2 - int(100 * SCALE_FACTOR), screen_height // 2, continue_img)
+		self.resume_button = Button(screen_width // 2 - int(100 * SCALE_FACTOR), screen_height // 2, resume_img)
 
 	# resets platform group
 	def reset_groups(self):
@@ -752,9 +716,8 @@ class Game():
 		self.properties()
 		world = World()
 		player = Character(0, screen_height - 130)
-		chaser = Chaser(0, screen_height - 130)  # Use Chaser instead of RLChaser
-		chaser.start_time = pygame.time.get_ticks()  # Reset start time
-		chaser.is_active = False  # Reset active state
+		chaser = Chaser(0, screen_height - 130)
+		self.chaser = chaser  # Store chaser reference
 		game_over = 0
 
 		values = []
@@ -768,10 +731,15 @@ class Game():
 		global current_level
 		timer = 30
 		ttext = str(timer)
-
 		self.timer_counter, self.timer_text = timer, ttext.rjust(3)
 		pygame.time.set_timer(pygame.USEREVENT, 1000)
 		self.timer_font = pygame.font.SysFont('comicsansms', 25)
+		# Set the chaser's start time to match the timer start
+		if hasattr(self, 'chaser'):
+			self.chaser.start_time = pygame.time.get_ticks()
+			self.chaser.is_active = False
+			self.chaser.paused_time = 0  # Reset paused time
+			self.chaser.last_pause_time = 0  # Reset last pause time
 
 	# start game functionality
 	def start(self):
@@ -780,16 +748,17 @@ class Game():
 		global game_finished
 		global max_levels
 		global current_level
+		global points
 
-		self.sounds()
 		self.properties()
 		world = World()
 		player = Character(0, screen_height - 130)
-		chaser = Chaser(0, screen_height - 130)  # Use Chaser instead of RLChaser
-		self.game_timer()
+		chaser = Chaser(0, screen_height - 130)
+		self.chaser = chaser  # Store chaser reference
 
 		run = True
 		while(run):
+			# Maintain consistent FPS
 			self.clock.tick(self.fps)
 
 			# draw assets onto the screen
@@ -797,67 +766,171 @@ class Game():
 
 			# setup main menu
 			if in_menu:
-				if self.quit_button.draw():
+				if self.quit_button.draw(screen):
 					run = False
-				if self.play_button.draw():
+				if self.play_button.draw(screen):
 					in_menu = False
+					points = 0  # Reset points when starting new game
+					self.game_timer()  # Start timer only after play button is clicked
+					self.timer_started = True  # Mark timer as started
 			else:
 				world.draw_tiles()
 				check_points[0].draw(screen)
 				lava_tiles[0].draw(screen)
-				player.draw_player()
-				chaser.update(player)  # Update chaser
-				chaser.draw(screen)    # Draw chaser
+				
+				# Pass game_paused state to player
+				player.draw_player(self.question_ui.is_game_paused())
+				
+				# Draw platforms first
+				plats[0].draw(screen)
+				
+				# Update chaser with current pause state
+				chaser.update(player, self.question_ui.is_game_paused())
+				
+				# Only update game elements if not paused
+				if not self.question_ui.is_game_paused():
+					# Update platforms only when not paused
+					plats[0].update()
+					chaser.draw(screen)
+					
+					# Draw timer and score if game is not paused and timer has started
+					if self.timer_started:
+						screen.blit(self.timer_font.render(self.timer_text, True, (47, 48, 29)), (60, 42))
+						screen.blit(self.score_font.render(f"Score: {points}", True, (47, 48, 29)), (screen_width - 150, 42))
+					
+					# Check for collision between player and chaser
+					if chaser.rect.colliderect(player.rect):
+						game_over = -1  # Player caught by chaser
+				else:
+					# When paused, just draw the chaser without updating
+					chaser.draw(screen)
 
-				# Check for collision between player and chaser
-				if chaser.rect.colliderect(player.rect):
-					game_over = -1  # Player caught by chaser
+				# Check for collision with moving platforms in level 1
+				if current_level == 0:  # Level 1
+					for platform in plats[0]:
+						# Check if player is on top of the platform with a small tolerance
+						if (not platform.question_shown and 
+							abs(player.rect.bottom - platform.rect.top) <= 2 and  # Small tolerance for exact position
+							player.rect.right > platform.rect.left + 5 and   # Small margin from edges
+							player.rect.left < platform.rect.right - 5 and
+							not player.in_air):  # Player is not jumping/falling
+							
+							platform.question_shown = True
+							self.question_ui.show_random_question()
+							self.question_ui.set_game_paused(True)
+
+				# Draw question UI if active
+				if self.question_ui.is_active():
+					self.question_ui.draw()
 
 				# player active
 				if game_over == 0:
-					plats[0].update()
+					pass  # Removed redundant platform update
 
 				# player finished level
 				if game_over == 1:
 					self.timer_counter = 0
-					current_level += 1
-					values = self.load_level()
-					player = values[0]
-					world = values[1]
-					chaser = values[2]
+					# Check if player has enough points to progress
+					if points >= POINTS_THRESHOLD:
+						if current_level == 0:
+							current_level = 2  # Skip level 1 (index 1) and go directly to level 3 (index 2)
+						else:
+							current_level += 1
+						values = self.load_level()
+						player = values[0]
+						world = values[1]
+						chaser = values[2]
 
-					if current_level == max_levels:
-						game_finished = True
+						if current_level > max_levels:
+							game_finished = True
+						else:
+							self.game_timer()
 					else:
-						self.game_timer()
+						# Show insufficient points message
+						self.insufficient_points = True
+						game_over = -1  # Treat as game over
 
-				# player death
+				# player death or insufficient points
 				if game_over == -1:
 					self.timer_counter = 0
-					if self.resume_button.draw():
+					self.timer_started = False  # Reset timer started flag
+					
+					# Draw game over message and score
+					title_font = pygame.font.SysFont('comicsansms', 50)
+					subtitle_font = pygame.font.SysFont('comicsansms', 30)
+					
+					if self.insufficient_points:
+						# Main title for insufficient points
+						title = title_font.render("Better Luck Next Time!", True, (255, 0, 0))
+						title_rect = title.get_rect(center=(screen_width//2, screen_height//2 - 100))
+						
+						# Score message
+						score_text = subtitle_font.render(f"Points Required: {POINTS_THRESHOLD}, Your Score: {points}", True, (255, 255, 255))
+						score_rect = score_text.get_rect(center=(screen_width//2, screen_height//2 - 30))
+					else:
+						# Regular game over message
+						title = title_font.render("Game Over!", True, (255, 0, 0))
+						title_rect = title.get_rect(center=(screen_width//2, screen_height//2 - 100))
+						
+						# Score message
+						score_text = subtitle_font.render(f"Total Score: {points}", True, (255, 255, 255))
+						score_rect = score_text.get_rect(center=(screen_width//2, screen_height//2 - 30))
+					
+					# Draw the messages
+					screen.blit(title, title_rect)
+					screen.blit(score_text, score_rect)
+					
+					if self.resume_button.draw(screen):
 						values = self.load_level()
 						player = values[0]
 						world = values[1]
 						chaser = values[2]
 						self.game_timer()
-					if self.quit_button.draw():
+						self.timer_started = True  # Mark timer as started
+						self.insufficient_points = False  # Reset insufficient points flag
+					if self.quit_button.draw(screen):
 						run = False
 
 				# player won
 				if game_finished:
 					self.timer_counter = 0
-					if self.quit_button.draw():
+					self.timer_started = False  # Reset timer started flag
+					# Draw congratulatory message
+					title_font = pygame.font.SysFont('comicsansms', 50)
+					subtitle_font = pygame.font.SysFont('comicsansms', 30)
+					
+					# Main title with emojis
+					title = title_font.render("🎉 Congratulations! 🎉", True, (255, 215, 0))
+					title_rect = title.get_rect(center=(screen_width//2, screen_height//2 - 50))
+					
+					# Subtitle with emojis and final score
+					subtitle = subtitle_font.render(f"You are now a Champion Banker! 💰🏆 Final Score: {points}", True, (255, 255, 255))
+					subtitle_rect = subtitle.get_rect(center=(screen_width//2, screen_height//2 + 20))
+					
+					# Draw the messages
+					screen.blit(title, title_rect)
+					screen.blit(subtitle, subtitle_rect)
+					
+					if self.quit_button.draw(screen):
 						run = False
-
-				plats[0].draw(screen)
-				screen.blit(self.timer_font.render(self.timer_text, True, (47, 48, 29)), (60, 42))
 
 			for event in pygame.event.get():
 				if event.type == pygame.QUIT:
 					run = False
 
-				# game timer
-				if event.type == pygame.USEREVENT:
+				# Handle question UI events
+				if self.question_ui.is_active():
+					result = self.question_ui.handle_events(event)
+					if result is not None:
+						is_correct, used_ask_ai = result
+						# Question was answered, check if correct
+						if is_correct:
+							points += 3 if used_ask_ai else 5
+						# Don't reset or unpause here - let QuestionUI handle the delay
+						# The game will automatically unpause when QuestionUI is done
+
+				# game timer - only process if timer has started
+				if event.type == pygame.USEREVENT and self.timer_started and not self.question_ui.is_game_paused():
 					self.timer_counter -= 1
 					if self.timer_counter > 0:
 						self.timer_text = str(self.timer_counter).rjust(3)
