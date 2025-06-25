@@ -766,6 +766,45 @@ class Game():
 
 			# setup main menu
 			if in_menu:
+				# --- Draw Rules ---
+				rules = [
+					("Reach the final flag to finish the level.", 0),
+					("You have 30 seconds to complete each level.", 0),
+					("A chasing bird appears after 8 seconds — run fast!", 0),
+					("Answer platform questions to earn points:", 0),
+					("Correct answer = 5 points", 1),
+					("Wrong answer = 0 points", 1),
+					("Stuck? Use AI Assist for a hint.", 0),
+					("Correct answer with help = 3 points", 1),
+					("Score over 15 points to unlock Level 2!", 0)
+				]
+				rules_font = pygame.font.SysFont('comicsansms', int(26 * SCALE_FACTOR))
+				bullet = "•"
+				line_height = int(36 * SCALE_FACTOR)
+				total_height = len(rules) * line_height
+				# Move the rules even higher on the screen
+				start_y = screen_height // 2 - int(400 * SCALE_FACTOR)
+				# Draw a fully opaque background box for the rules
+				box_width = int(screen_width * 0.85)
+				box_height = total_height + int(32 * SCALE_FACTOR)
+				box_x = (screen_width - box_width) // 2
+				box_y = start_y - int(16 * SCALE_FACTOR)
+				rules_bg = pygame.Surface((box_width, box_height), pygame.SRCALPHA)
+				rules_bg.fill((30, 30, 30, 255))  # Solid dark background
+				pygame.draw.rect(rules_bg, (0, 0, 0, 255), rules_bg.get_rect(), border_radius=18)
+				screen.blit(rules_bg, (box_x, box_y))
+				# Draw each rule line in white, left-aligned with bullet
+				left_margin = box_x + int(36 * SCALE_FACTOR)
+				for i, (line, indent) in enumerate(rules):
+					color = (255, 255, 255) if indent == 0 else (200, 220, 255)
+					bullet_str = bullet + "  " if indent == 0 else "    " + bullet + "  "
+					text = bullet_str + line
+					text_surface = rules_font.render(text, True, color)
+					# Left align: x = left_margin + extra indent for sub-points
+					x_pos = left_margin + (indent * int(36 * SCALE_FACTOR))
+					y_pos = start_y + i * line_height
+					screen.blit(text_surface, (x_pos, y_pos))
+				# --- End Draw Rules ---
 				if self.quit_button.draw(screen):
 					run = False
 				if self.play_button.draw(screen):
