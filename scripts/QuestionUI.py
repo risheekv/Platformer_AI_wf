@@ -4,6 +4,9 @@ import os
 import sys
 import random
 import math
+import subprocess
+import time
+import threading
 
 # Add Button import
 from Button import Button
@@ -124,11 +127,12 @@ class QuestionUI:
         # Initialize available questions
         self.reset_available_questions()
         
-        self.showing_ai_image = False
-        self.ai_image = None
-        self.ai_image_rect = None
+        self.showing_ai_answer = False
+        self.copilot_answer = None
         self.back_button = self.create_back_button()
         self.ask_ai_clicked = False
+        self.copilot_thread = None
+        self.copilot_loading = False
     
     def create_gradient_surface(self, width, height, start_color, end_color, angle=0):
         surface = pygame.Surface((width, height))
@@ -193,11 +197,12 @@ class QuestionUI:
         self.asked_questions.add(question_index)
     
     def handle_events(self, event):
-        if self.showing_ai_image:
+        if self.showing_ai_answer:
             if event.type == pygame.MOUSEBUTTONDOWN:
                 if self.back_button.rect.collidepoint(event.pos):
-                    self.showing_ai_image = False
-                    print("Back button clicked, returning to question view.")
+                    self.showing_ai_answer = False
+                    self.copilot_loading = False
+                    self.copilot_answer = None
                     return None
             return None
         if not self.active or self.question_answered:
@@ -216,10 +221,13 @@ class QuestionUI:
         if event.type == pygame.MOUSEBUTTONDOWN:
             # Check if Ask AI button was clicked
             if self.ask_ai_button.rect.collidepoint(event.pos) and not self.ask_ai_clicked:
-                self.showing_ai_image = True
-                self.load_ai_image()
                 self.ask_ai_clicked = True
-                print("Ask AI button clicked, showing image view.")
+                self.showing_ai_answer = True
+                self.copilot_loading = True
+                self.copilot_answer = None
+                # Start thread to fetch Copilot answer
+                self.copilot_thread = threading.Thread(target=self.fetch_copilot_answer_thread, args=(self.current_question["question"],))
+                self.copilot_thread.start()
                 return None
 
             # Handle option button clicks
@@ -363,56 +371,73 @@ class QuestionUI:
         button = Button(0, 0, button_surface)
         return button
 
-    def load_ai_image(self):
-        if self.current_question and self.current_question.get('image_path'):
-            image_path = self.current_question['image_path']
-            print(f"Attempting to load image from: {image_path}")
-            if not os.path.exists(image_path):
-                print(f"Error: Image file does not exist at {image_path}")
-                return
-            try:
-                img = pygame.image.load(image_path)
-                # Scale image to fit screen while maintaining aspect ratio
-                screen_width = self.screen.get_width()
-                screen_height = self.screen.get_height()
-                img_width = img.get_width()
-                img_height = img.get_height()
-                scale = min(screen_width / img_width, screen_height / img_height) * 0.8
-                new_width = int(img_width * scale)
-                new_height = int(img_height * scale)
-                img = pygame.transform.scale(img, (new_width, new_height))
-                self.ai_image = img
-                self.ai_image_rect = img.get_rect(center=(screen_width // 2, screen_height // 2))
-                print(f"Successfully loaded image: {image_path}, size: {img.get_width()}x{img.get_height()}")
-            except Exception as e:
-                print(f"Error loading image: {self.current_question['image_path']}")
-                print(f"Exception: {str(e)}")
+    def get_copilot_answer(self, prompt):
+        try:
+            import datetime
+            script_path = os.path.join(os.path.dirname(__file__), 'selenium_copilot_automation.py')
+            output_path = os.path.join(os.path.dirname(__file__), 'copilot_output.txt')
+            before = time.time()
+            print(f"Running Copilot automation for prompt: {prompt}")
+            print(f"Output path: {output_path}")
+            subprocess.run([sys.executable, script_path, prompt], check=True)
+            # Wait up to 30 seconds for the file to exist, be non-empty, and be freshly written
+            for i in range(60):
+                exists = os.path.exists(output_path)
+                size = os.path.getsize(output_path) if exists else 0
+                mtime = os.path.getmtime(output_path) if exists else 0
+                print(f"Check {i}: exists={exists}, size={size}, mtime={mtime}, before={before}")
+                if exists and size > 0 and mtime > before:
+                    break
+                time.sleep(0.5)
+            if not os.path.exists(output_path) or os.path.getsize(output_path) == 0:
+                print("[Error: Copilot output not found or empty after waiting.]")
+                return "[Error: Copilot output not found or empty after waiting.]"
+            mtime = os.path.getmtime(output_path)
+            if mtime <= before:
+                print("[Error: Copilot output is stale (not updated for this question).]")
+                return "[Error: Copilot output is stale (not updated for this question).]"
+            with open(output_path, 'r', encoding='utf-8') as f:
+                answer = f.read()
+            print(f"Read answer from file: {answer[:100]}")
+            return answer
+        except Exception as e:
+            print(f"Error in get_copilot_answer: {e}")
+            return f"[Error getting Copilot answer: {e}]"
+
+    def fetch_copilot_answer_thread(self, prompt):
+        answer = self.get_copilot_answer(prompt)
+        self.copilot_answer = answer
+        self.copilot_loading = False
 
     def draw(self):
-        if self.showing_ai_image:
+        if self.showing_ai_answer:
             # Draw overlay
             if self.overlay_alpha < 200:
                 self.overlay_alpha = min(200, self.overlay_alpha + 40)
             self.overlay.set_alpha(self.overlay_alpha)
             self.screen.blit(self.overlay, (0, 0))
-            # Determine image size and position
-            if self.ai_image and self.ai_image_rect:
-                img_w, img_h = self.ai_image_rect.width, self.ai_image_rect.height
+            # Draw Copilot answer or loading
+            if self.copilot_loading:
+                answer_text = "Waiting for Copilot..."
             else:
-                img_w, img_h = max(int(self.screen.get_width() * 0.7), int(500 * SCALE_FACTOR)), max(int(self.screen.get_height() * 0.7), int(375 * SCALE_FACTOR))
-            img_x = (self.screen.get_width() - img_w) // 2
-            img_y = (self.screen.get_height() - img_h) // 2
-            rect = pygame.Rect(img_x, img_y, img_w, img_h)
-            pygame.draw.rect(self.screen, self.colors['border'], rect, 6)
-            if self.ai_image:
-                self.screen.blit(self.ai_image, (img_x, img_y))
-            else:
-                # Draw placeholder if image missing
-                placeholder = self.font.render("No Image Available", True, (200, 50, 50))
-                ph_rect = placeholder.get_rect(center=(self.screen.get_width()//2, self.screen.get_height()//2))
-                self.screen.blit(placeholder, ph_rect)
-            # Draw Back button below image
-            self.back_button.rect.topleft = (img_x + img_w//2 - self.back_button.rect.width//2, img_y + img_h + int(30 * SCALE_FACTOR))
+                answer_text = self.copilot_answer or "[No answer received]"
+            font = self.font
+            # Use 90% of the screen width and height for the box
+            box_width = int(self.screen.get_width() * 0.9)
+            max_box_height = int(self.screen.get_height() * 0.9)
+            lines = self.wrap_text(answer_text, font, box_width - 40)
+            box_height = min(len(lines) * font.get_height() + 40, max_box_height)
+            box_x = (self.screen.get_width() - box_width) // 2
+            box_y = (self.screen.get_height() - box_height) // 2
+            pygame.draw.rect(self.screen, self.colors['background'], (box_x, box_y, box_width, box_height))
+            pygame.draw.rect(self.screen, self.colors['border'], (box_x, box_y, box_width, box_height), 2)
+            # Only draw lines that fit in the box
+            max_lines = (box_height - 40) // font.get_height()
+            for i, line in enumerate(lines[:max_lines]):
+                text_surface = font.render(line, True, self.colors['text'])
+                self.screen.blit(text_surface, (box_x + 20, box_y + 20 + i * font.get_height()))
+            # Draw Back button below answer
+            self.back_button.rect.topleft = (box_x + box_width//2 - self.back_button.rect.width//2, box_y + box_height + 20)
             self.back_button.draw(self.screen)
             return
         if not self.active or self.current_question is None:
