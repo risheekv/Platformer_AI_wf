@@ -5,6 +5,7 @@ import pyperclip
 import platform
 import sys
 import os
+import pygetwindow as gw
 
 # CONFIGURATION
 DEFAULT_PROMPT = "Tell me about the different types of equipment financing."
@@ -33,17 +34,17 @@ def open_vscode():
             # Use AppleScript to make VS Code full screen
             script = f'''osascript -e 'tell application "System Events" to tell process "Visual Studio Code" to set value of attribute "AXFullScreen" of window 1 to true' '''
             os.system(script)
-        else:
+        elif platform.system() == 'Windows':
             subprocess.Popen([VSCODE_EXE])
             time.sleep(2)
-            # Try to maximize the VS Code window on Windows
-            try:
-                import pygetwindow as gw
-                win = gw.getWindowsWithTitle(VSCODE_WINDOW_TITLE)
-                if win:
-                    win[0].maximize()
-            except Exception as e:
-                print(f"Could not maximize VS Code window: {e}")
+            import pygetwindow as gw
+            win = gw.getWindowsWithTitle("Visual Studio Code")
+            if win:
+                win[0].activate()
+                win[0].maximize()
+                time.sleep(1)
+        else:
+            subprocess.call(['wmctrl', '-a', GAME_WINDOW_TITLE])
         print("VS Code launched.")
     except Exception as e:
         print(f"Failed to open VS Code: {e}")
