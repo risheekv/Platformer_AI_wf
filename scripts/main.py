@@ -927,6 +927,7 @@ class Game():
 						self.game_timer()
 						self.timer_started = True  # Mark timer as started
 						self.insufficient_points = False  # Reset insufficient points flag
+						points = 0  # Reset points when restarting after game over
 					if self.quit_button.draw(screen):
 						run = False
 
