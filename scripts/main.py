@@ -435,29 +435,29 @@ class Character():
 			return [0, 0]
 
 		# currently idle
-		if not key[pygame.K_w] or not key[pygame.K_a] or not key[pygame.K_d]:
+		if not key[pygame.K_LEFT] and not key[pygame.K_RIGHT] and not key[pygame.K_SPACE]:
 			self.counter += 1
 			self.animation = "idle"
 
 		# currently jumping
-		if key[pygame.K_w] and self.jumped == False and self.in_air == False:
+		if key[pygame.K_SPACE] and self.jumped == False and self.in_air == False:
 			self.vel_y = -15 * SCALE_FACTOR  # Scaled jump height
 			self.jumped = True
 			self.counter += 1
 			self.animation = "jump"
 
-		if key[pygame.K_w] == False:
+		if not key[pygame.K_SPACE]:
 			self.jumped = False
 
 		# currently running right
-		if key[pygame.K_d]:
+		if key[pygame.K_RIGHT]:
 			dx += 5 * SCALE_FACTOR  # Scaled movement speed
 			self.counter += 1
 			self.direction = 1
 			self.animation = "run"
 
 		# currently running left
-		if key[pygame.K_a]:
+		if key[pygame.K_LEFT]:
 			dx -= 5 * SCALE_FACTOR  # Scaled movement speed
 			self.counter += 1
 			self.direction = -1
@@ -603,7 +603,7 @@ class Chaser(pygame.sprite.Sprite):
 		self.max_buffer_size = 1000
 		self.training_enabled = False  # Disable training during gameplay
 		self.start_time = pygame.time.get_ticks()  # Record start time
-		self.delay = 8000  # 8 seconds delay in milliseconds
+		self.delay = 20000  # 8 seconds delay in milliseconds
 		self.is_active = False  # Flag to track if chaser is active
 		self.paused_time = 0  # Track time spent paused
 		self.last_pause_time = 0  # Track when we last paused

@@ -26,6 +26,8 @@ class QuestionUI:
         self.feedback_alpha = 0
         self.feedback_timer = 0
         self.overlay_alpha = 0
+        self.question_box_alpha = 0
+        self.question_box_scale = 0.92
         self.hover_index = -1
         self.animation_time = 0
         self.show_feedback = False
@@ -129,6 +131,7 @@ class QuestionUI:
         self.ai_image_rect = None
         self.back_button = self.create_back_button()
         self.ask_ai_clicked = False
+        self.option_rects = []  # Store dynamic option rects for click/hover
     
     def create_gradient_surface(self, width, height, start_color, end_color, angle=0):
         surface = pygame.Surface((width, height))
@@ -191,6 +194,10 @@ class QuestionUI:
         
         # Add to asked questions
         self.asked_questions.add(question_index)
+        
+        self.overlay_alpha = 0
+        self.question_box_alpha = 0
+        self.question_box_scale = 0.92
     
     def handle_events(self, event):
         if self.showing_ai_image:
@@ -205,12 +212,12 @@ class QuestionUI:
 
         # Handle mouse movement for hover effect
         if event.type == pygame.MOUSEMOTION:
-            for i, button in enumerate(self.buttons):
-                if button.rect.collidepoint(event.pos):
-                    self.hover_index = i
-                    break
-            else:
-                self.hover_index = -1
+            self.hover_index = -1
+            if hasattr(self, 'option_rects') and self.option_rects:
+                for i, rect in enumerate(self.option_rects):
+                    if rect.collidepoint(event.pos):
+                        self.hover_index = i
+                        break
 
         # Handle mouse clicks
         if event.type == pygame.MOUSEBUTTONDOWN:
@@ -223,20 +230,21 @@ class QuestionUI:
                 return None
 
             # Handle option button clicks
-            for i, button in enumerate(self.buttons):
-                if button.rect.collidepoint(event.pos):
-                    self.selected_option = i
-                    self.question_answered = True
-                    self.show_feedback = True
-                    self.feedback_timer = 60  # 1 second delay at 60 FPS
-                    self.feedback_alpha = 0
-                    # Set feedback message immediately
-                    if i == self.correct_answer:
-                        self.feedback_message = "🎉 Correct! " + self.current_question["explanation"]
-                        return (True, self.ask_ai_clicked)
-                    else:
-                        self.feedback_message = f"❌ Incorrect! The correct answer was: {self.current_question['options'][self.correct_answer]}"
-                        return (False, self.ask_ai_clicked)
+            if hasattr(self, 'option_rects') and self.option_rects:
+                for i, rect in enumerate(self.option_rects):
+                    if rect.collidepoint(event.pos):
+                        self.selected_option = i
+                        self.question_answered = True
+                        self.show_feedback = True
+                        self.feedback_timer = 60  # 1 second delay at 60 FPS
+                        self.feedback_alpha = 0
+                        # Set feedback message immediately
+                        if i == self.correct_answer:
+                            self.feedback_message = "🎉 Correct! " + self.current_question["explanation"]
+                            return (True, self.ask_ai_clicked)
+                        else:
+                            self.feedback_message = f"❌ Incorrect! The correct answer was: {self.current_question['options'][self.correct_answer]}"
+                            return (False, self.ask_ai_clicked)
 
         # Handle keyboard navigation
         if event.type == pygame.KEYDOWN:
@@ -294,8 +302,11 @@ class QuestionUI:
         self.feedback_alpha = 0
         self.feedback_timer = 0
         self.overlay_alpha = 0
+        self.question_box_alpha = 0
+        self.question_box_scale = 0.92
         self.hover_index = -1
         self.ask_ai_clicked = False
+        self.option_rects = []  # Reset option rects each frame
     
     def wrap_text(self, text, font, max_width):
         """Wrap text to fit within max_width"""
@@ -427,19 +438,26 @@ class QuestionUI:
                 self.feedback_timer -= 1
                 # Fade in during first half, fade out during second half
                 if self.feedback_timer > 30:
-                    self.feedback_alpha = min(255, self.feedback_alpha + 17)
+                    self.feedback_alpha = min(255, self.feedback_alpha + 5)  # even slower fade
                 else:
-                    self.feedback_alpha = max(0, self.feedback_alpha - 17)
+                    self.feedback_alpha = max(0, self.feedback_alpha - 5)
             else:
-                # Reset everything when feedback is complete
                 self.reset()  # This will handle both unpausing and resetting
                 return
         
-        # Smoothly fade in the overlay
+        # Smoothly fade in the overlay (even slower)
         if self.overlay_alpha < 200:
-            self.overlay_alpha = min(200, self.overlay_alpha + 40)
+            self.overlay_alpha = min(200, self.overlay_alpha + 4)
         self.overlay.set_alpha(self.overlay_alpha)
         self.screen.blit(self.overlay, (0, 0))
+        
+        # Smoothly fade and scale in the question box
+        if self.overlay_alpha >= 180 and self.question_box_alpha < 255:
+            self.question_box_alpha = min(255, self.question_box_alpha + 7)
+            self.question_box_scale = min(1.0, self.question_box_scale + 0.01)
+        elif self.overlay_alpha < 180:
+            self.question_box_alpha = 0
+            self.question_box_scale = 0.92
         
         # Position Ask AI button in top right corner of game window
         self.ask_ai_button.rect.topleft = (
@@ -448,48 +466,60 @@ class QuestionUI:
         )
         self.ask_ai_button.draw(self.screen)
         
-        # Draw question box
+        # Draw question box with scale and shadow
         question_lines = self.wrap_text(self.current_question["question"], self.title_font, int(700 * SCALE_FACTOR))
         question_height = len(question_lines) * self.title_font.get_height() + int(40 * SCALE_FACTOR)
-        
         question_box_width = int(700 * SCALE_FACTOR)
         question_box_x = (self.screen.get_width() - question_box_width) // 2
         question_box_y = self.screen.get_height() // 4 - question_height // 2
-        
+
+        # Scale for animation
+        scale = self.question_box_scale
+        scaled_width = int(question_box_width * scale)
+        scaled_height = int(question_height * scale)
+        scaled_x = question_box_x + (question_box_width - scaled_width) // 2
+        scaled_y = question_box_y + (question_height - scaled_height) // 2
+
+        # Draw drop shadow
+        shadow_offset = int(18 * SCALE_FACTOR)
+        shadow_surf = pygame.Surface((scaled_width, scaled_height), pygame.SRCALPHA)
+        shadow_surf.fill((0, 0, 0, int(self.question_box_alpha * 0.25)))
+        self.screen.blit(shadow_surf, (scaled_x + shadow_offset, scaled_y + shadow_offset))
+
         # Create animated gradient for question box
         question_gradient = self.create_gradient_surface(
-            question_box_width, question_height,
+            scaled_width, scaled_height,
             self.colors['gradient_start'],
             self.colors['gradient_end'],
             math.sin(self.animation_time) * 45
         )
-        self.screen.blit(question_gradient, (question_box_x, question_box_y))
-        pygame.draw.rect(self.screen, self.colors['border'], 
-                        (question_box_x, question_box_y, question_box_width, question_height), 2)
-        
+        question_gradient.set_alpha(self.question_box_alpha)
+        self.screen.blit(question_gradient, (scaled_x, scaled_y))
+
         # Draw wrapped question text
-        question_alpha = min(255, self.overlay_alpha * 2)
+        question_alpha = max(60, min(self.question_box_alpha, 255))
         for i, line in enumerate(question_lines):
             line_surface = self.title_font.render(line, True, self.colors['text'])
             line_surface.set_alpha(question_alpha)
             line_rect = line_surface.get_rect(center=(self.screen.get_width() // 2,
-                                                    question_box_y + int(20 * SCALE_FACTOR) + i * self.title_font.get_height()))
+                                                    scaled_y + int(20 * SCALE_FACTOR * scale) + i * int(self.title_font.get_height() * scale)))
             self.screen.blit(line_surface, line_rect)
         
         # Draw options with color feedback
-        button_width = int(600 * SCALE_FACTOR)
-        button_height = int(50 * SCALE_FACTOR)
-        spacing = int(20 * SCALE_FACTOR)
+        button_width = int(600 * SCALE_FACTOR * scale)
+        button_height = int(50 * SCALE_FACTOR * scale)
+        spacing = int(20 * SCALE_FACTOR * scale)
         
+        self.option_rects = []  # Reset option rects each frame
         for i, option in enumerate(self.current_question["options"]):
             # Wrap option text
-            option_lines = self.wrap_text(option, self.font, button_width - int(40 * SCALE_FACTOR))
-            option_height = len(option_lines) * self.font.get_height() + int(20 * SCALE_FACTOR)
-            button_height = max(int(50 * SCALE_FACTOR), option_height)
+            option_lines = self.wrap_text(option, self.font, button_width - int(40 * SCALE_FACTOR * scale))
+            option_height = len(option_lines) * int(self.font.get_height() * scale) + int(20 * SCALE_FACTOR * scale)
+            button_height = max(int(50 * SCALE_FACTOR * scale), option_height)
             
             # Calculate button position
             button_x = (self.screen.get_width() - button_width) // 2
-            button_y = self.screen.get_height() // 2 - int(50 * SCALE_FACTOR) + i * (button_height + spacing)
+            button_y = self.screen.get_height() // 2 - int(50 * SCALE_FACTOR * scale) + i * (button_height + spacing)
             
             # Determine button colors based on selection state
             if self.question_answered and self.show_feedback:
@@ -520,18 +550,23 @@ class QuestionUI:
                 start_color, end_color,
                 math.sin(self.animation_time) * 45
             )
+            button_gradient.set_alpha(self.question_box_alpha)
             self.screen.blit(button_gradient, (button_x, button_y))
-            pygame.draw.rect(self.screen, border_color, 
-                           (button_x, button_y, button_width, button_height), 2)
-            
-            # Draw wrapped option text
+            # Store the actual rect for this option
+            self.option_rects.append(pygame.Rect(button_x, button_y, button_width, button_height))
+
+            # Center-align wrapped option text vertically and horizontally
+            total_text_height = len(option_lines) * int(self.font.get_height() * scale)
+            text_start_y = button_y + (button_height - total_text_height) // 2
+            # Ensure option text is always visible (minimum alpha 60)
+            option_alpha = max(60, min(self.question_box_alpha, 255))
             for j, line in enumerate(option_lines):
                 line_surface = self.font.render(line, True, self.colors['text'])
-                line_surface.set_alpha(question_alpha)
+                line_surface.set_alpha(option_alpha)
                 line_rect = line_surface.get_rect(center=(self.screen.get_width() // 2,
-                                                        button_y + int(10 * SCALE_FACTOR) + j * self.font.get_height()))
+                                                        text_start_y + j * int(self.font.get_height() * scale) + int(self.font.get_height() * scale) // 2))
                 self.screen.blit(line_surface, line_rect)
-        
+
         # Draw feedback message
         if self.question_answered and self.show_feedback and self.feedback_timer > 0:
             feedback_lines = self.wrap_text(self.feedback_message, self.font, int(600 * SCALE_FACTOR))
