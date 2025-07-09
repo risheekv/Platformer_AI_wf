@@ -4,6 +4,7 @@ import os
 import sys
 import random
 import math
+import pandas as pd
 
 # Add Button import
 from Button import Button
@@ -32,6 +33,7 @@ class QuestionUI:
         self.animation_time = 0
         self.show_feedback = False
         self.feedback_message = ""
+        self.current_level = ""  # Track current question level
         
         # Track asked questions
         self.asked_questions = set()
@@ -70,58 +72,7 @@ class QuestionUI:
         self.create_buttons()
         
         # Questions list
-        self.questions = [
-            {
-                "question": "Why might a large company lease machinery instead of buying it outright?",
-                "options": ["To increase taxes", "To own it faster", "To reduce upfront costs and save cash", "To avoid training employees"],
-                "correct": 2,
-                "explanation": "Leasing machinery helps companies reduce upfront costs and conserve cash flow.",
-                "image_path": "sprites/questions/lease_machinery.png"
-            },
-            {
-                "question": "What is one major benefit of leasing equipment instead of buying it?",
-                "options": ["You can return it after each use", "Lower maintenance fees", "No need for insurance", "Use now, pay over time"],
-                "correct": 3,
-                "explanation": "Leasing allows companies to use equipment immediately while spreading the cost over time.",
-                "image_path": "sprites/questions/leasing_benefit.png"
-            },
-            {
-                "question": "Leasing equipment is often preferred by businesses because:",
-                "options": ["It comes with free upgrades", "It requires no legal contracts", "It frees up money for other investments", "It removes the need for employees"],
-                "correct": 2,
-                "explanation": "Leasing frees up capital that can be used for other business investments.",
-                "image_path": "sprites/questions/leasing_preference.png"
-            },
-            {
-                "question": "What does a company usually offer as security when taking a loan backed by assets?",
-                "options": ["Its future ideas", "Inventory or unpaid customer invoices", "Social media followers", "Office snacks"],
-                "correct": 1,
-                "explanation": "Companies typically use inventory or accounts receivable as security for asset-backed loans.",
-                "image_path": "sprites/questions/asset_security.png"
-            },
-            {
-                "question": "Why would a business use a loan backed by its assets?",
-                "options": ["To buy shares in other companies", "To get quick access to money without selling ownership", "To shut down operations", "To pay employee bonuses only"],
-                "correct": 1,
-                "explanation": "Asset-backed loans provide quick access to capital without giving up company ownership.",
-                "image_path": "sprites/questions/asset_loan.png"
-            },
-            {
-                "question": "What kind of assets can help a company get a business loan?",
-                "options": ["Office pets", "Furniture only", "Equipment, inventory, or customer payments due", "Company name"],
-                "correct": 2,
-                "explanation": "Tangible assets like equipment, inventory, and accounts receivable can be used as collateral.",
-                "image_path": "sprites/questions/business_assets.png"
-            },
-            {
-                "question": "Why would a company choose a loan secured by assets instead of a regular loan?",
-                "options": ["Easier to qualify if the company owns valuable stuff", "It always comes with free gadgets", "It doesn't need to be repaid", "It avoids any paperwork"],
-                "correct": 0,
-                "explanation": "Asset-secured loans are often easier to qualify for if the company has valuable assets.",
-                "image_path": "sprites/questions/asset_secured_loan.png"
-            },
-            
-        ]
+        self.questions = self.load_questions_from_excel('scripts/questions.xlsx')
         
         # Initialize available questions
         self.reset_available_questions()
@@ -132,6 +83,10 @@ class QuestionUI:
         self.back_button = self.create_back_button()
         self.ask_ai_clicked = False
         self.option_rects = []  # Store dynamic option rects for click/hover
+        self.show_ask_ai = False  # Only show Ask AI button for last 2 platforms
+        self.question_timer = 0
+        self.question_timer_max = 15  # 15 seconds
+        self.question_timer_active = False
     
     def create_gradient_surface(self, width, height, start_color, end_color, angle=0):
         surface = pygame.Surface((width, height))
@@ -174,11 +129,12 @@ class QuestionUI:
         self.available_questions = list(range(len(self.questions)))
         random.shuffle(self.available_questions)
 
-    def show_random_question(self):
-        """Show a random question that hasn't been asked recently"""
+    def show_random_question(self, show_ask_ai=False):
+        """Show a random question that hasn't been asked recently. show_ask_ai: only show Ask AI button if True."""
         self.active = True
         self.game_paused = True
         self.question_answered = False
+        self.show_ask_ai = show_ask_ai
         
         # If we've used all questions, reset the pool
         if not self.available_questions:
@@ -198,6 +154,8 @@ class QuestionUI:
         self.overlay_alpha = 0
         self.question_box_alpha = 0
         self.question_box_scale = 0.92
+        self.question_timer = self.question_timer_max * 60  # 60 FPS
+        self.question_timer_active = True
     
     def handle_events(self, event):
         if self.showing_ai_image:
@@ -306,6 +264,7 @@ class QuestionUI:
         self.question_box_scale = 0.92
         self.hover_index = -1
         self.ask_ai_clicked = False
+        self.current_level = ""  # Reset current level
         self.option_rects = []  # Reset option rects each frame
     
     def wrap_text(self, text, font, max_width):
@@ -399,6 +358,21 @@ class QuestionUI:
                 print(f"Error loading image: {self.current_question['image_path']}")
                 print(f"Exception: {str(e)}")
 
+    def update(self):
+        # Call this once per frame from the main game loop
+        if self.active and self.question_timer_active and not self.question_answered:
+            if self.question_timer > 0:
+                self.question_timer -= 1
+            else:
+                # Time's up, mark as wrong
+                self.question_answered = True
+                self.show_feedback = True
+                self.selected_option = None
+                self.feedback_message = f"⏰ Time's up! The correct answer was: {self.current_question['options'][self.correct_answer]}"
+                self.feedback_timer = 60  # 1 second delay at 60 FPS
+                self.feedback_alpha = 0
+                self.question_timer_active = False
+
     def draw(self):
         if self.showing_ai_image:
             # Draw overlay
@@ -406,24 +380,64 @@ class QuestionUI:
                 self.overlay_alpha = min(200, self.overlay_alpha + 40)
             self.overlay.set_alpha(self.overlay_alpha)
             self.screen.blit(self.overlay, (0, 0))
-            # Determine image size and position
-            if self.ai_image and self.ai_image_rect:
-                img_w, img_h = self.ai_image_rect.width, self.ai_image_rect.height
-            else:
-                img_w, img_h = max(int(self.screen.get_width() * 0.7), int(500 * SCALE_FACTOR)), max(int(self.screen.get_height() * 0.7), int(375 * SCALE_FACTOR))
-            img_x = (self.screen.get_width() - img_w) // 2
-            img_y = (self.screen.get_height() - img_h) // 2
-            rect = pygame.Rect(img_x, img_y, img_w, img_h)
-            pygame.draw.rect(self.screen, self.colors['border'], rect, 6)
-            if self.ai_image:
-                self.screen.blit(self.ai_image, (img_x, img_y))
-            else:
-                # Draw placeholder if image missing
-                placeholder = self.font.render("No Image Available", True, (200, 50, 50))
-                ph_rect = placeholder.get_rect(center=(self.screen.get_width()//2, self.screen.get_height()//2))
-                self.screen.blit(placeholder, ph_rect)
-            # Draw Back button below image
-            self.back_button.rect.topleft = (img_x + img_w//2 - self.back_button.rect.width//2, img_y + img_h + int(30 * SCALE_FACTOR))
+
+            # --- Draw Ask AI button in top right if show_ask_ai is True ---
+            if self.show_ask_ai:
+                self.ask_ai_button.rect.topleft = (
+                    self.screen.get_width() - self.ask_ai_button.rect.width - int(20 * SCALE_FACTOR),
+                    int(20 * SCALE_FACTOR)
+                )
+                self.ask_ai_button.draw(self.screen)
+
+            # --- Draw Question Box (Top) ---
+            question_lines = self.wrap_text(self.current_question["question"], self.title_font, int(700 * SCALE_FACTOR))
+            question_height = len(question_lines) * self.title_font.get_height() + int(40 * SCALE_FACTOR)
+            question_box_width = int(700 * SCALE_FACTOR)
+            question_box_x = (self.screen.get_width() - question_box_width) // 2
+            question_box_y = self.screen.get_height() // 2 - int(200 * SCALE_FACTOR)
+
+            # Gradient and border for question box
+            question_gradient = self.create_gradient_surface(
+                question_box_width, question_height,
+                self.colors['gradient_start'],
+                self.colors['gradient_end'],
+                math.sin(self.animation_time) * 45
+            )
+            self.screen.blit(question_gradient, (question_box_x, question_box_y))
+            pygame.draw.rect(self.screen, self.colors['border'], (question_box_x, question_box_y, question_box_width, question_height), 4)
+
+            # Draw wrapped question text
+            for i, line in enumerate(question_lines):
+                line_surface = self.title_font.render(line, True, self.colors['text'])
+                line_rect = line_surface.get_rect(center=(self.screen.get_width() // 2,
+                                                          question_box_y + int(20 * SCALE_FACTOR) + i * self.title_font.get_height()))
+                self.screen.blit(line_surface, line_rect)
+
+            # --- Draw Hint/Explanation Box (Bottom) ---
+            hint_lines = self.wrap_text(self.current_question["explanation"], self.font, int(700 * SCALE_FACTOR))
+            hint_height = len(hint_lines) * self.font.get_height() + int(40 * SCALE_FACTOR)
+            hint_box_width = int(700 * SCALE_FACTOR)
+            hint_box_x = (self.screen.get_width() - hint_box_width) // 2
+            hint_box_y = question_box_y + question_height + int(40 * SCALE_FACTOR)
+
+            hint_gradient = self.create_gradient_surface(
+                hint_box_width, hint_height,
+                self.colors['option_gradient_start'],
+                self.colors['option_gradient_end'],
+                math.sin(self.animation_time) * 45
+            )
+            self.screen.blit(hint_gradient, (hint_box_x, hint_box_y))
+            pygame.draw.rect(self.screen, self.colors['border'], (hint_box_x, hint_box_y, hint_box_width, hint_height), 4)
+
+            # Draw wrapped hint text
+            for i, line in enumerate(hint_lines):
+                line_surface = self.font.render(line, True, self.colors['text'])
+                line_rect = line_surface.get_rect(center=(self.screen.get_width() // 2,
+                                                          hint_box_y + int(20 * SCALE_FACTOR) + i * self.font.get_height()))
+                self.screen.blit(line_surface, line_rect)
+
+            # Draw Back button below the hint box
+            self.back_button.rect.topleft = (hint_box_x + hint_box_width//2 - self.back_button.rect.width//2, hint_box_y + hint_height + int(30 * SCALE_FACTOR))
             self.back_button.draw(self.screen)
             return
         if not self.active or self.current_question is None:
@@ -460,11 +474,12 @@ class QuestionUI:
             self.question_box_scale = 0.92
         
         # Position Ask AI button in top right corner of game window
-        self.ask_ai_button.rect.topleft = (
-            self.screen.get_width() - self.ask_ai_button.rect.width - int(20 * SCALE_FACTOR),
-            int(20 * SCALE_FACTOR)
-        )
-        self.ask_ai_button.draw(self.screen)
+        if self.show_ask_ai:
+            self.ask_ai_button.rect.topleft = (
+                self.screen.get_width() - self.ask_ai_button.rect.width - int(20 * SCALE_FACTOR),
+                int(20 * SCALE_FACTOR)
+            )
+            self.ask_ai_button.draw(self.screen)
         
         # Draw question box with scale and shadow
         question_lines = self.wrap_text(self.current_question["question"], self.title_font, int(700 * SCALE_FACTOR))
@@ -496,8 +511,10 @@ class QuestionUI:
         question_gradient.set_alpha(self.question_box_alpha)
         self.screen.blit(question_gradient, (scaled_x, scaled_y))
 
-        # Draw wrapped question text
+        # Calculate question alpha for text
         question_alpha = max(60, min(self.question_box_alpha, 255))
+
+        # Draw wrapped question text
         for i, line in enumerate(question_lines):
             line_surface = self.title_font.render(line, True, self.colors['text'])
             line_surface.set_alpha(question_alpha)
@@ -588,5 +605,76 @@ class QuestionUI:
             feedback_x = (self.screen.get_width() - int(600 * SCALE_FACTOR)) // 2
             self.screen.blit(feedback_surface, (feedback_x, feedback_y))
 
+        # Draw question timer if active
+        if self.active and self.question_timer_active and not self.question_answered:
+            timer_font = pygame.font.SysFont('comicsansms', int(32 * SCALE_FACTOR))
+            seconds_left = max(0, int(self.question_timer // 60))
+            timer_text = timer_font.render(f"Time Left: {seconds_left}s", True, (255, 100, 100))
+            timer_rect = timer_text.get_rect(center=(self.screen.get_width() // 2, scaled_y - int(40 * SCALE_FACTOR)))
+            self.screen.blit(timer_text, timer_rect)
+
     def set_game_paused(self, paused):
         self.game_paused = paused 
+
+    def load_questions_from_excel(self, filename):
+        if not os.path.exists(filename):
+            print(f"Excel file {filename} not found. No questions loaded.")
+            return []
+        df = pd.read_excel(filename)
+        questions = []
+        for _, row in df.iterrows():
+            # Parse correct answer index (e.g., 'Option 1' -> 0)
+            correct_str = str(row.get('Correct Answer', '')).strip().lower()
+            correct_idx = None
+            for i in range(1, 5):
+                if correct_str == f'option {i}':
+                    correct_idx = i - 1
+                    break
+            if correct_idx is None:
+                print(f"Warning: Could not parse correct answer for question: {row.get('Question', '')}")
+                continue
+            questions.append({
+                "question": str(row.get('Question', '')),
+                "options": [
+                    str(row.get('Answer 1', '')),
+                    str(row.get('Answer 2', '')),
+                    str(row.get('Answer 3', '')),
+                    str(row.get('Answer 4', ''))
+                ],
+                "correct": correct_idx,
+                "explanation": str(row.get('Hint', '')),
+                "complexity": str(row.get('Complexity', '')) if 'Complexity' in row else '',
+                # Optionally add: "domain": row.get('Domain', '')
+            })
+        return questions
+
+    def show_random_question_by_complexity(self, complexity, show_ask_ai=False):
+        """Show a random question of the given complexity. If none, fallback to any question."""
+        self.active = True
+        self.game_paused = True
+        self.question_answered = False
+        self.show_ask_ai = show_ask_ai
+        self.current_level = complexity  # Store the current level
+
+        # Filter available questions by complexity and not already asked
+        available = [i for i, q in enumerate(self.questions)
+                     if q.get('complexity', '').strip().lower() == complexity.strip().lower() and i not in self.asked_questions]
+        if not available:
+            # Fallback: any not-asked question
+            available = [i for i in range(len(self.questions)) if i not in self.asked_questions]
+        if not available:
+            # Fallback: reset all
+            self.asked_questions = set()
+            available = [i for i in range(len(self.questions))]
+        question_index = random.choice(available)
+        self.current_question = self.questions[question_index]
+        self.correct_answer = self.current_question["correct"]
+        self.selected_option = None
+        self.show_feedback = False
+        self.feedback_message = ""
+        self.asked_questions.add(question_index)
+        self.overlay_alpha = 0
+        self.question_box_alpha = 0
+        self.question_box_scale = 0.92
+        self.question_timer = self.question_timer_max * 60  # 60 FPS
+        self.question_timer_active = True 
