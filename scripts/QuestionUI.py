@@ -5,6 +5,9 @@ import sys
 import random
 import math
 import pandas as pd
+import requests
+import threading
+from Config import SCALE_FACTOR, get_llm_api_config, get_apigee_bearer_token
 
 # Add Button import
 from Button import Button
@@ -87,6 +90,9 @@ class QuestionUI:
         self.question_timer = 0
         self.question_timer_max = 15  # 15 seconds
         self.question_timer_active = False
+        self.ai_hint = None
+        self.ai_loading = False
+        self.ai_error = None
     
     def create_gradient_surface(self, width, height, start_color, end_color, angle=0):
         surface = pygame.Surface((width, height))
@@ -182,9 +188,12 @@ class QuestionUI:
             # Check if Ask AI button was clicked
             if self.ask_ai_button.rect.collidepoint(event.pos) and not self.ask_ai_clicked:
                 self.showing_ai_image = True
-                self.load_ai_image()
                 self.ask_ai_clicked = True
-                print("Ask AI button clicked, showing image view.")
+                self.ai_hint = None
+                self.ai_loading = True
+                self.ai_error = None
+                threading.Thread(target=self.fetch_ai_hint, daemon=True).start()
+                print("Ask AI button clicked, calling LLM API.")
                 return None
 
             # Handle option button clicks
@@ -414,7 +423,15 @@ class QuestionUI:
                 self.screen.blit(line_surface, line_rect)
 
             # --- Draw Hint/Explanation Box (Bottom) ---
-            hint_lines = self.wrap_text(self.current_question["explanation"], self.font, int(700 * SCALE_FACTOR))
+            hint_lines = []
+            if self.ai_loading:
+                hint_lines = ["Loading AI hint..."]
+            elif self.ai_error:
+                hint_lines = [self.ai_error]
+            elif self.ai_hint:
+                hint_lines = self.wrap_text(self.ai_hint, self.font, int(700 * SCALE_FACTOR))
+            else:
+                hint_lines = self.wrap_text(self.current_question["explanation"], self.font, int(700 * SCALE_FACTOR))
             hint_height = len(hint_lines) * self.font.get_height() + int(40 * SCALE_FACTOR)
             hint_box_width = int(700 * SCALE_FACTOR)
             hint_box_x = (self.screen.get_width() - hint_box_width) // 2
@@ -678,3 +695,16 @@ class QuestionUI:
         self.question_box_scale = 0.92
         self.question_timer = self.question_timer_max * 60  # 60 FPS
         self.question_timer_active = True 
+
+    def fetch_ai_hint(self):
+        import time
+        try:
+            # FAKE LLM RESPONSE FOR LOCAL TESTING
+            time.sleep(1)  # Simulate network delay
+            self.ai_hint = "This is a fake AI-generated hint for local testing."
+            self.ai_loading = False
+            self.ai_error = None
+        except Exception as e:
+            self.ai_hint = None
+            self.ai_loading = False
+            self.ai_error = f"Error: {str(e)}" 

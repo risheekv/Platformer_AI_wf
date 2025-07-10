@@ -1,4 +1,7 @@
 import os
+import json
+import re
+import requests
 
 # Get the absolute path to the project root directory
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -91,3 +94,44 @@ Sounds = {
 	"over" : os.path.join(PROJECT_ROOT, "sounds", "game_over.wav"),
 	"complete" : os.path.join(PROJECT_ROOT, "sounds", "game_complete.wav"),
 }
+
+def load_api_config():
+    api_txt_path = os.path.join(PROJECT_ROOT, 'scripts', 'API.txt')
+    with open(api_txt_path, 'r') as f:
+        # Remove possible trailing commas and parse as JSON-like
+        content = f.read()
+        # Fix for non-standard JSON: replace '"services" {' with '{"services": {' and single quotes
+        content = content.replace('"services" {', '{"services": {')
+        content = content.replace("'", '"')
+        # Remove any trailing commas before closing braces
+        content = re.sub(r',\s*}', '}', content)
+        content = re.sub(r',\s*]', ']', content)
+        config = json.loads(content)
+    return config
+
+def get_llm_api_config():
+    # FAKE CONFIG FOR LOCAL TESTING
+    return {
+        'endpoint': 'https://example.com/fake-llm-endpoint',
+        'api_key': 'FAKE_API_KEY',
+        'client_id': 'FAKE_CLIENT_ID',
+        'model': 'fake-model',
+        'usecase_id': 'fake-usecase-id'
+    }
+
+def get_apigee_oauth_config():
+    config = load_api_config()
+    apigee = config['services']['apigee']
+    oauth_url = apigee['oauth-url']
+    consumer_key = apigee['consumer']['key']
+    consumer_secret = apigee['consumer']['secret']
+    return {
+        'oauth_url': oauth_url,
+        'consumer_key': consumer_key,
+        'consumer_secret': consumer_secret
+    }
+
+# This function can be used to obtain a bearer token before calling the LLM API
+def get_apigee_bearer_token():
+    # FAKE TOKEN FOR LOCAL TESTING
+    return 'FAKE_BEARER_TOKEN'
