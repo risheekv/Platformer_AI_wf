@@ -33,7 +33,7 @@ in_menu = True
 game_finished = False
 game_over = 0 					# Game-Over flag
 current_level = 0				# level counter
-max_levels = 2					# number of game levels (0 indexed)
+max_levels = 0					# only one level (level 1)
 score_count = 0					# coin score count
 points = 0                      # points for correct answers
 POINTS_THRESHOLD = 20           # minimum points needed to progress
@@ -603,7 +603,7 @@ class Chaser(pygame.sprite.Sprite):
 		self.max_buffer_size = 1000
 		self.training_enabled = False  # Disable training during gameplay
 		self.start_time = pygame.time.get_ticks()  # Record start time
-		self.delay = 20000  # 8 seconds delay in milliseconds
+		self.delay = 20000  # 20 seconds delay in milliseconds
 		self.is_active = False  # Flag to track if chaser is active
 		self.paused_time = 0  # Track time spent paused
 		self.last_pause_time = 0  # Track when we last paused
@@ -761,50 +761,72 @@ class Game():
 			# Maintain consistent FPS
 			self.clock.tick(self.fps)
 
+			# Update question timer if active
+			self.question_ui.update()
+
 			# draw assets onto the screen
 			world.draw_world()
 
 			# setup main menu
 			if in_menu:
-				# --- Draw Rules ---
+				# --- Draw Game Title ---
+				title_font = pygame.font.SysFont('comicsansms', int(48 * SCALE_FACTOR))
+				title_text = title_font.render("🎮 MAZE RUNNER 🎮", True, (255, 215, 0))
+				title_rect = title_text.get_rect(center=(screen_width // 2, int(80 * SCALE_FACTOR)))
+				screen.blit(title_text, title_rect)
+				
+				# --- Draw Rules in Compact Format ---
 				rules = [
-					("Reach the final flag to finish the level.", 0),
-					("You have 30 seconds to complete each level.", 0),
-					("A chasing bird appears after 8 seconds — run fast!", 0),
-					("Answer platform questions to earn points:", 0),
-					("Correct answer = 5 points", 1),
-					("Wrong answer = 0 points", 1),
-					("Stuck? Use AI Assist for a hint.", 0),
-					("Correct answer with help = 3 points", 1),
-					("Score over 15 points to unlock Level 2!", 0)
+					("Reach the final flag to finish the game.", 0),
+					("30 seconds per level • Bird appears after 20s", 0),
+					("Answer questions to earn points:", 0),
+					("Level 1 = 3 pts • Level 2 = 5 pts • Level 3 = 8 pts (6 with AI)", 1),
+					("15s question timer • Wrong = 0 points", 1),
+					("🏆 Legend: 32+ • ⚔️ Gladiator: 24+ • 🛡️ Warrior: 20+", 1),
+					("Use AI Assist for hints • Score 20+ to unlock Level 2!", 0)
 				]
-				rules_font = pygame.font.SysFont('comicsansms', int(26 * SCALE_FACTOR))
-				bullet = "•"
-				line_height = int(36 * SCALE_FACTOR)
+				rules_font = pygame.font.SysFont('comicsansms', int(22 * SCALE_FACTOR))
+				line_height = int(28 * SCALE_FACTOR)
 				total_height = len(rules) * line_height
-				# Move the rules even higher on the screen
-				start_y = screen_height // 2 - int(400 * SCALE_FACTOR)
-				# Draw a fully opaque background box for the rules
-				box_width = int(screen_width * 0.85)
-				box_height = total_height + int(32 * SCALE_FACTOR)
+				
+				# Position rules in upper portion, above buttons
+				start_y = int(150 * SCALE_FACTOR)
+				box_width = int(screen_width * 0.75)
+				box_height = total_height + int(40 * SCALE_FACTOR)
 				box_x = (screen_width - box_width) // 2
-				box_y = start_y - int(16 * SCALE_FACTOR)
+				box_y = start_y - int(20 * SCALE_FACTOR)
+				
+				# Create elegant gradient background
 				rules_bg = pygame.Surface((box_width, box_height), pygame.SRCALPHA)
-				rules_bg.fill((30, 30, 30, 255))  # Solid dark background
-				pygame.draw.rect(rules_bg, (0, 0, 0, 255), rules_bg.get_rect(), border_radius=18)
+				# Gradient from dark blue to purple
+				for y in range(box_height):
+					ratio = y / box_height
+					r = int(25 * (1 - ratio) + 40 * ratio)
+					g = int(25 * (1 - ratio) + 30 * ratio)
+					b = int(50 * (1 - ratio) + 80 * ratio)
+					pygame.draw.line(rules_bg, (r, g, b), (0, y), (box_width, y))
+				
+				# Add border and shadow effect
+				pygame.draw.rect(rules_bg, (255, 255, 255, 50), rules_bg.get_rect(), 2)
 				screen.blit(rules_bg, (box_x, box_y))
-				# Draw each rule line in white, left-aligned with bullet
-				left_margin = box_x + int(36 * SCALE_FACTOR)
+				
+				# Draw rules with better formatting
+				left_margin = box_x + int(30 * SCALE_FACTOR)
 				for i, (line, indent) in enumerate(rules):
 					color = (255, 255, 255) if indent == 0 else (200, 220, 255)
-					bullet_str = bullet + "  " if indent == 0 else "    " + bullet + "  "
+					bullet_str = "▶ " if indent == 0 else "   • "
 					text = bullet_str + line
 					text_surface = rules_font.render(text, True, color)
-					# Left align: x = left_margin + extra indent for sub-points
-					x_pos = left_margin + (indent * int(36 * SCALE_FACTOR))
+					x_pos = left_margin + (indent * int(20 * SCALE_FACTOR))
 					y_pos = start_y + i * line_height
 					screen.blit(text_surface, (x_pos, y_pos))
-				# --- End Draw Rules ---
+				
+				# --- Draw Buttons in Bottom Section ---
+				# Position buttons in the bottom third of the screen
+				button_y = screen_height - int(200 * SCALE_FACTOR)
+				self.play_button.rect.centery = button_y
+				self.quit_button.rect.centery = button_y + int(90 * SCALE_FACTOR)
+				
 				if self.quit_button.draw(screen):
 					run = False
 				if self.play_button.draw(screen):
@@ -834,7 +856,11 @@ class Game():
 					
 					# Draw timer and score if game is not paused and timer has started
 					if self.timer_started:
-						screen.blit(self.timer_font.render(self.timer_text, True, (47, 48, 29)), (60, 42))
+						timer_surface = self.timer_font.render(self.timer_text, True, (47, 48, 29))
+						timer_rect = timer_surface.get_rect()
+						timer_rect.topleft = (60, 42)
+						screen.blit(timer_surface, timer_rect)
+
 						screen.blit(self.score_font.render(f"Score: {points}", True, (47, 48, 29)), (screen_width - 150, 42))
 					
 					# Check for collision between player and chaser
@@ -844,9 +870,45 @@ class Game():
 					# When paused, just draw the chaser without updating
 					chaser.draw(screen)
 
+				# Draw level indicator as a button beside timer if a question is active (always visible)
+				if self.question_ui.is_active() and self.question_ui.current_level and self.timer_started:
+					timer_surface = self.timer_font.render(self.timer_text, True, (47, 48, 29))
+					timer_rect = timer_surface.get_rect()
+					timer_rect.topleft = (60, 42)
+					
+					level_str = str(self.question_ui.current_level).strip()
+					if level_str.lower().startswith('level'):
+						level_str = level_str.title()
+					else:
+						level_str = f"Level {level_str}"
+					level_font = pygame.font.SysFont('comicsansms', int(22 * SCALE_FACTOR))
+					level_text = level_font.render(level_str, True, (255, 255, 255))
+					# Button style background
+					padding_x = int(18 * SCALE_FACTOR)
+					padding_y = int(8 * SCALE_FACTOR)
+					button_width = level_text.get_width() + 2 * padding_x
+					button_height = level_text.get_height() + 2 * padding_y
+					button_x = timer_rect.right + int(18 * SCALE_FACTOR)
+					button_y = timer_rect.top - int(4 * SCALE_FACTOR)
+					button_rect = pygame.Rect(button_x, button_y, button_width, button_height)
+					# Gradient background
+					button_bg = pygame.Surface((button_width, button_height), pygame.SRCALPHA)
+					for y in range(button_height):
+						ratio = y / button_height
+						r = int(41 * (1 - ratio) + 142 * ratio)
+						g = int(128 * (1 - ratio) + 68 * ratio)
+						b = int(185 * (1 - ratio) + 173 * ratio)
+						pygame.draw.line(button_bg, (r, g, b), (0, y), (button_width, y))
+					pygame.draw.rect(button_bg, (255, 255, 255, 80), button_bg.get_rect(), 2, border_radius=12)
+					screen.blit(button_bg, (button_x, button_y))
+					# Draw level text centered
+					level_text_rect = level_text.get_rect(center=button_rect.center)
+					screen.blit(level_text, level_text_rect)
+
 				# Check for collision with moving platforms in level 1
 				if current_level == 0:  # Level 1
-					for platform in plats[0]:
+					platform_list = list(plats[0])
+					for idx, platform in enumerate(platform_list):
 						# Check if player is on top of the platform with a small tolerance
 						if (not platform.question_shown and 
 							abs(player.rect.bottom - platform.rect.top) <= 2 and  # Small tolerance for exact position
@@ -855,7 +917,17 @@ class Game():
 							not player.in_air):  # Player is not jumping/falling
 							
 							platform.question_shown = True
-							self.question_ui.show_random_question()
+							show_ask_ai = (idx == 3 or idx == 5)
+							# Select question complexity based on platform index
+							if idx in [2, 4]:
+								complexity = 'Level 1'
+							elif idx in [0, 1]:
+								complexity = 'Level 2'
+							elif idx in [3, 5]:
+								complexity = 'Level 3'
+							else:
+								complexity = ''  # fallback: any
+							self.question_ui.show_random_question_by_complexity(complexity, show_ask_ai=show_ask_ai)
 							self.question_ui.set_game_paused(True)
 
 				# Draw question UI if active
@@ -871,19 +943,7 @@ class Game():
 					self.timer_counter = 0
 					# Check if player has enough points to progress
 					if points >= POINTS_THRESHOLD:
-						if current_level == 0:
-							current_level = 2  # Skip level 1 (index 1) and go directly to level 3 (index 2)
-						else:
-							current_level += 1
-						values = self.load_level()
-						player = values[0]
-						world = values[1]
-						chaser = values[2]
-
-						if current_level > max_levels:
-							game_finished = True
-						else:
-							self.game_timer()
+						game_finished = True
 					else:
 						# Show insufficient points message
 						self.insufficient_points = True
@@ -935,22 +995,34 @@ class Game():
 				if game_finished:
 					self.timer_counter = 0
 					self.timer_started = False  # Reset timer started flag
-					# Draw congratulatory message
-					title_font = pygame.font.SysFont('comicsansms', 50)
-					subtitle_font = pygame.font.SysFont('comicsansms', 30)
-					
-					# Main title with emojis
-					title = title_font.render("🎉 Congratulations! 🎉", True, (255, 215, 0))
-					title_rect = title.get_rect(center=(screen_width//2, screen_height//2 - 50))
-					
-					# Subtitle with emojis and final score
-					subtitle = subtitle_font.render(f"You are now a Champion Banker! 💰🏆 Final Score: {points}", True, (255, 255, 255))
-					subtitle_rect = subtitle.get_rect(center=(screen_width//2, screen_height//2 + 20))
-					
-					# Draw the messages
+					# Draw improved congratulatory message
+					title_font = pygame.font.SysFont('comicsansms', 56)
+					subtitle_font = pygame.font.SysFont('comicsansms', 32)
+
+					# Main title with emojis and celebratory text
+					title = title_font.render("🏁 Level Complete! 🏁", True, (255, 215, 0))
+					subtitle = subtitle_font.render(f"Congratulations! You finished the game! Final Score: {points}", True, (255, 255, 255))
+
+					# Calculate background box size
+					padding_x = int(60 * SCALE_FACTOR)
+					padding_y = int(40 * SCALE_FACTOR)
+					box_width = max(title.get_width(), subtitle.get_width()) + 2 * padding_x
+					box_height = title.get_height() + subtitle.get_height() + 3 * padding_y
+					box_x = (screen_width - box_width) // 2
+					box_y = (screen_height - box_height) // 2
+
+					# Draw semi-transparent background box
+					bg_surf = pygame.Surface((box_width, box_height), pygame.SRCALPHA)
+					bg_surf.fill((30, 30, 30, 220))
+					pygame.draw.rect(bg_surf, (0, 0, 0, 255), bg_surf.get_rect(), border_radius=18)
+					screen.blit(bg_surf, (box_x, box_y))
+
+					# Draw the messages with extra spacing
+					title_rect = title.get_rect(center=(screen_width//2, box_y + padding_y + title.get_height()//2))
+					subtitle_rect = subtitle.get_rect(center=(screen_width//2, title_rect.bottom + padding_y + subtitle.get_height()//2))
 					screen.blit(title, title_rect)
 					screen.blit(subtitle, subtitle_rect)
-					
+
 					if self.quit_button.draw(screen):
 						run = False
 
@@ -965,7 +1037,20 @@ class Game():
 						is_correct, used_ask_ai = result
 						# Question was answered, check if correct
 						if is_correct:
-							points += 3 if used_ask_ai else 5
+							# Get complexity from current question
+							complexity = self.question_ui.current_question.get('complexity', '').strip().lower()
+							if complexity in ['1', 'level 1']:
+								points += 3
+							elif complexity in ['2', 'level 2']:
+								points += 5
+							elif complexity in ['3', 'level 3']:
+								if used_ask_ai:
+									points += 6
+								else:
+									points += 8
+							else:
+								# fallback if complexity missing
+								points += 3 if used_ask_ai else 5
 						# Don't reset or unpause here - let QuestionUI handle the delay
 						# The game will automatically unpause when QuestionUI is done
 
@@ -979,6 +1064,10 @@ class Game():
 						self.timer_text = '0'.rjust(3)
 						if not game_finished:
 							game_over = -1
+
+				# After handling question UI events and update, check for timeout game over
+				if self.question_ui.active and self.question_ui.question_answered and self.question_ui.show_feedback and self.question_ui.feedback_message.startswith("⏰ Time's up!"):
+					game_over = -1
 
 			pygame.display.update()
 
