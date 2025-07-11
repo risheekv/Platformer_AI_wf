@@ -19,6 +19,24 @@ import sys
 
 # ------------ Globals ------------
 
+# Utility function for domain selection buttons
+
+def create_text_button(text, x, y, width, height, font, colors):
+    button_img = pygame.Surface((width, height))
+    gradient = pygame.Surface((width, height))
+    for i in range(height):
+        ratio = i / height
+        r = int(colors[0][0] * (1 - ratio) + colors[1][0] * ratio)
+        g = int(colors[0][1] * (1 - ratio) + colors[1][1] * ratio)
+        b = int(colors[0][2] * (1 - ratio) + colors[1][2] * ratio)
+        pygame.draw.line(gradient, (r, g, b), (0, i), (width, i))
+    button_img.blit(gradient, (0, 0))
+    pygame.draw.rect(button_img, (255, 255, 255), button_img.get_rect(), 2)
+    text_surf = font.render(text, True, (255, 255, 255))
+    text_rect = text_surf.get_rect(center=(width // 2, height // 2))
+    button_img.blit(text_surf, text_rect)
+    return Button(x, y, button_img)
+
 # dimensions: 18 x 20
 screen_width = int(1000 * SCALE_FACTOR) 			# screen width
 screen_height = int(900 * SCALE_FACTOR) 			# screen height
@@ -656,14 +674,15 @@ class Game():
 		mixer.init()
 		self.fps = 60  # Fixed FPS at 60
 		self.clock = pygame.time.Clock()
+		self.domain_buttons = []
+		self.selected_domain = None
+		self.question_ui = None
 		self.game_menu()
-		self.question_ui = QuestionUI(screen)  # Initialize question UI
 		self.score_font = pygame.font.SysFont('comicsansms', int(25 * SCALE_FACTOR))  # Scaled font size
 		self.timer_started = False  # New flag to track if timer has started
 		self.insufficient_points = False  # Flag to track if player has insufficient points
 		self.start()
 
-	# setup in-game menu
 	def game_menu(self):
 		play_img = pygame.image.load(Config.UI["play"])
 		quit_img = pygame.image.load(Config.UI["quit"])
@@ -680,7 +699,19 @@ class Game():
 		self.continue_button = Button(screen_width // 2 - int(100 * SCALE_FACTOR), screen_height // 2, continue_img)
 		self.resume_button = Button(screen_width // 2 - int(100 * SCALE_FACTOR), screen_height // 2, resume_img)
 
-	# resets platform group
+		# Create domain buttons
+		domain_font = pygame.font.SysFont('comicsansms', int(32 * SCALE_FACTOR))
+		button_width = int(350 * SCALE_FACTOR)
+		button_height = int(70 * SCALE_FACTOR)
+		spacing = int(30 * SCALE_FACTOR)
+		start_y = screen_height // 2 - ((len(Config.DOMAINS) * (button_height + spacing)) // 2)
+		self.domain_buttons = []
+		for i, domain in enumerate(Config.DOMAINS.keys()):
+			x = screen_width // 2 - button_width // 2
+			y = start_y + i * (button_height + spacing)
+			btn = create_text_button(domain, x, y, button_width, button_height, domain_font, [(41,128,185), (142,68,173)])
+			self.domain_buttons.append((domain, btn))
+
 	def reset_groups(self):
 		global plats
 		global check_points
@@ -694,7 +725,6 @@ class Game():
 		self.check_group.empty()
 		self.lava_group.empty()
 
-	# create all properties
 	def properties(self):
 		global plats
 		global check_points
@@ -708,7 +738,6 @@ class Game():
 		check_points.append(self.check_group)
 		lava_tiles.append(self.lava_group)
 
-	# load level
 	def load_level(self):
 		global game_over
 
@@ -726,7 +755,6 @@ class Game():
 		values.append(chaser)
 		return values
 
-	# handle level timer
 	def game_timer(self):
 		global current_level
 		timer = 30
@@ -741,14 +769,15 @@ class Game():
 			self.chaser.paused_time = 0  # Reset paused time
 			self.chaser.last_pause_time = 0  # Reset last pause time
 
-	# start game functionality
 	def start(self):
 		global in_menu
+		global in_domain_select
 		global game_over
 		global game_finished
 		global max_levels
 		global current_level
 		global points
+		global selected_domain
 
 		self.properties()
 		world = World()
@@ -762,7 +791,8 @@ class Game():
 			self.clock.tick(self.fps)
 
 			# Update question timer if active
-			self.question_ui.update()
+			if self.question_ui:
+				self.question_ui.update()
 
 			# draw assets onto the screen
 			world.draw_world()
@@ -826,35 +856,38 @@ class Game():
 				button_y = screen_height - int(200 * SCALE_FACTOR)
 				self.play_button.rect.centery = button_y
 				self.quit_button.rect.centery = button_y + int(90 * SCALE_FACTOR)
-				
+
 				if self.quit_button.draw(screen):
 					run = False
 				if self.play_button.draw(screen):
 					in_menu = False
+					in_domain_select = True
 					points = 0  # Reset points when starting new game
-					self.game_timer()  # Start timer only after play button is clicked
-					self.timer_started = True  # Mark timer as started
+					self.timer_started = False
+			elif in_domain_select:
+				# Draw domain selection screen
+				title_font = pygame.font.SysFont('comicsansms', int(40 * SCALE_FACTOR))
+				title_text = title_font.render("Choose a Domain", True, (255, 215, 0))
+				title_rect = title_text.get_rect(center=(screen_width // 2, int(120 * SCALE_FACTOR)))
+				screen.blit(title_text, title_rect)
+				for domain, btn in self.domain_buttons:
+					if btn.draw(screen):
+						selected_domain = domain
+						in_domain_select = False
+						# Pass the selected domain's XLSX to QuestionUI
+						self.question_ui = QuestionUI(screen, Config.DOMAINS[selected_domain])
+						self.game_timer()  # Start timer only after domain is selected
+						self.timer_started = True
 			else:
 				world.draw_tiles()
 				check_points[0].draw(screen)
 				lava_tiles[0].draw(screen)
-				
-				# Pass game_paused state to player
 				player.draw_player(self.question_ui.is_game_paused())
-				
-				# Draw platforms first
 				plats[0].draw(screen)
-				
-				# Update chaser with current pause state
 				chaser.update(player, self.question_ui.is_game_paused())
-				
-				# Only update game elements if not paused
 				if not self.question_ui.is_game_paused():
-					# Update platforms only when not paused
 					plats[0].update()
 					chaser.draw(screen)
-					
-					# Draw timer and score if game is not paused and timer has started
 					if self.timer_started:
 						timer_surface = self.timer_font.render(self.timer_text, True, (47, 48, 29))
 						timer_rect = timer_surface.get_rect()
@@ -1031,7 +1064,7 @@ class Game():
 					run = False
 
 				# Handle question UI events
-				if self.question_ui.is_active():
+				if self.question_ui:
 					result = self.question_ui.handle_events(event)
 					if result is not None:
 						is_correct, used_ask_ai = result
@@ -1066,7 +1099,7 @@ class Game():
 							game_over = -1
 
 				# After handling question UI events and update, check for timeout game over
-				if self.question_ui.active and self.question_ui.question_answered and self.question_ui.show_feedback and self.question_ui.feedback_message.startswith("⏰ Time's up!"):
+				if self.question_ui and self.question_ui.active and self.question_ui.question_answered and self.question_ui.show_feedback and self.question_ui.feedback_message.startswith("⏰ Time's up!"):
 					game_over = -1
 
 			pygame.display.update()

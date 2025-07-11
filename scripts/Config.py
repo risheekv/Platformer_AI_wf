@@ -91,3 +91,12 @@ Sounds = {
 	"over" : os.path.join(PROJECT_ROOT, "sounds", "game_over.wav"),
 	"complete" : os.path.join(PROJECT_ROOT, "sounds", "game_complete.wav"),
 }
+
+# ------------ Domains ------------
+
+DOMAINS = {
+    "Equipment Finance": os.path.join(PROJECT_ROOT, "scripts", "questions_equipment_finance.xlsx"),
+    "Lending": os.path.join(PROJECT_ROOT, "scripts", "questions_lending.xlsx"),
+    "Trade Finance": os.path.join(PROJECT_ROOT, "scripts", "questions_trade_finance.xlsx"),
+    "Leasing": os.path.join(PROJECT_ROOT, "scripts", "questions_leasing.xlsx"),
+}

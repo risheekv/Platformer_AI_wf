@@ -13,7 +13,7 @@ from Button import Button
 from Config import SCALE_FACTOR
 
 class QuestionUI:
-    def __init__(self, screen):
+    def __init__(self, screen, questions_xlsx_path=None):
         self.screen = screen
         self.active = False
         self.current_question = None
@@ -72,7 +72,9 @@ class QuestionUI:
         self.create_buttons()
         
         # Questions list
-        self.questions = self.load_questions_from_excel('scripts/questions.xlsx')
+        if questions_xlsx_path is None:
+            questions_xlsx_path = 'scripts/questions.xlsx'
+        self.questions = self.load_questions_from_excel(questions_xlsx_path)
         
         # Initialize available questions
         self.reset_available_questions()
