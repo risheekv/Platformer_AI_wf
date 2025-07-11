@@ -13,7 +13,7 @@ from Button import Button
 from Config import SCALE_FACTOR
 
 class QuestionUI:
-    def __init__(self, screen, questions_xlsx_path=None):
+    def __init__(self, screen, sheet_name=None):
         self.screen = screen
         self.active = False
         self.current_question = None
@@ -72,9 +72,7 @@ class QuestionUI:
         self.create_buttons()
         
         # Questions list
-        if questions_xlsx_path is None:
-            questions_xlsx_path = 'scripts/questions.xlsx'
-        self.questions = self.load_questions_from_excel(questions_xlsx_path)
+        self.questions = self.load_questions_from_excel('scripts/questions.xlsx', sheet_name)
         
         # Initialize available questions
         self.reset_available_questions()
@@ -618,11 +616,11 @@ class QuestionUI:
     def set_game_paused(self, paused):
         self.game_paused = paused 
 
-    def load_questions_from_excel(self, filename):
+    def load_questions_from_excel(self, filename, sheet_name=None):
         if not os.path.exists(filename):
             print(f"Excel file {filename} not found. No questions loaded.")
             return []
-        df = pd.read_excel(filename)
+        df = pd.read_excel(filename, sheet_name=sheet_name)
         questions = []
         for _, row in df.iterrows():
             # Parse correct answer index (e.g., 'Option 1' -> 0)

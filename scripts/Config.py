@@ -95,8 +95,8 @@ Sounds = {
 # ------------ Domains ------------
 
 DOMAINS = {
-    "Equipment Finance": os.path.join(PROJECT_ROOT, "scripts", "questions_equipment_finance.xlsx"),
-    "Lending": os.path.join(PROJECT_ROOT, "scripts", "questions_lending.xlsx"),
-    "Trade Finance": os.path.join(PROJECT_ROOT, "scripts", "questions_trade_finance.xlsx"),
-    "Leasing": os.path.join(PROJECT_ROOT, "scripts", "questions_leasing.xlsx"),
+    "Equipment Finance": "Equipment Finance",
+    "Lending": "Lending",
+    "Trade Finance": "Trade Finance",
+    "Leasing": "Leasing",
 }
