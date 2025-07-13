@@ -1011,7 +1011,21 @@ class Game():
 					# Draw the messages
 					screen.blit(title, title_rect)
 					screen.blit(score_text, score_rect)
-					
+
+					# --- Show Rank (Game Over) ---
+					rank = None
+					if points >= 30:
+						rank = 'Legend'
+					elif points >= 24:
+						rank = 'Gladiator'
+					elif points >= 20:
+						rank = 'Warrior'
+					if rank:
+						rank_font = pygame.font.SysFont('comicsansms', 40)
+						rank_text = rank_font.render(f'Rank: {rank}', True, (255, 215, 0))
+						rank_rect = rank_text.get_rect(center=(screen_width//2, score_rect.bottom + 50))
+						screen.blit(rank_text, rank_rect)
+
 					if self.resume_button.draw(screen):
 						values = self.load_level()
 						player = values[0]
@@ -1056,6 +1070,20 @@ class Game():
 					screen.blit(title, title_rect)
 					screen.blit(subtitle, subtitle_rect)
 
+					# --- Show Rank (Game Finished) ---
+					rank = None
+					if points >= 30:
+						rank = 'Legend'
+					elif points >= 24:
+						rank = 'Gladiator'
+					elif points >= 20:
+						rank = 'Warrior'
+					if rank:
+						rank_font = pygame.font.SysFont('comicsansms', 44)
+						rank_text = rank_font.render(f'Rank: {rank}', True, (255, 215, 0))
+						rank_rect = rank_text.get_rect(center=(screen_width//2, subtitle_rect.bottom + 60))
+						screen.blit(rank_text, rank_rect)
+
 					if self.quit_button.draw(screen):
 						run = False
 
@@ -1073,17 +1101,17 @@ class Game():
 							# Get complexity from current question
 							complexity = self.question_ui.current_question.get('complexity', '').strip().lower()
 							if complexity in ['1', 'level 1']:
-								points += GameConfig.POINTS['Level 1']
+								points += GameConfig.POINTS['level_1']
 							elif complexity in ['2', 'level 2']:
-								points += GameConfig.POINTS['Level 2']
+								points += GameConfig.POINTS['level_2']
 							elif complexity in ['3', 'level 3']:
 								if used_ask_ai:
-									points += GameConfig.POINTS['Level 3 AI']
+									points += GameConfig.POINTS['level_3_ai']
 								else:
-									points += GameConfig.POINTS['Level 3']
+									points += GameConfig.POINTS['level_3']
 							else:
 								# fallback if complexity missing
-								points += GameConfig.POINTS['Level 1'] if used_ask_ai else GameConfig.POINTS['Level 2']
+								points += GameConfig.POINTS['fallback_ai'] if used_ask_ai else GameConfig.POINTS['fallback']
 						# Don't reset or unpause here - let QuestionUI handle the delay
 						# The game will automatically unpause when QuestionUI is done
 
