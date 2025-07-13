@@ -1,8 +1,8 @@
 import Config
+import GameConfig
 import Levels
 from Button import Button
 from QuestionUI import QuestionUI
-from Config import SCALE_FACTOR
 
 import random
 import pygame
@@ -38,9 +38,9 @@ def create_text_button(text, x, y, width, height, font, colors):
     return Button(x, y, button_img)
 
 # dimensions: 18 x 20
-screen_width = int(1000 * SCALE_FACTOR) 			# screen width
-screen_height = int(900 * SCALE_FACTOR) 			# screen height
-tile_size = int(50 * SCALE_FACTOR)				# tile size
+screen_width = GameConfig.SCREEN_WIDTH 			# screen width
+screen_height = GameConfig.SCREEN_HEIGHT 			# screen height
+tile_size = GameConfig.TILE_SIZE				# tile size
 world_tiles = []				# first layer
 
 pygame.init()
@@ -54,7 +54,7 @@ current_level = 0				# level counter
 max_levels = 0					# only one level (level 1)
 score_count = 0					# coin score count
 points = 0                      # points for correct answers
-POINTS_THRESHOLD = 20           # minimum points needed to progress
+POINTS_THRESHOLD = GameConfig.POINTS_THRESHOLD           # minimum points needed to progress
 
 	# --> Sounds
 pygame.mixer.pre_init(44100, -16, 2, 512)
@@ -459,7 +459,7 @@ class Character():
 
 		# currently jumping
 		if key[pygame.K_SPACE] and self.jumped == False and self.in_air == False:
-			self.vel_y = -15 * SCALE_FACTOR  # Scaled jump height
+			self.vel_y = -15 * GameConfig.SCALE_FACTOR  # Scaled jump height
 			self.jumped = True
 			self.counter += 1
 			self.animation = "jump"
@@ -469,14 +469,14 @@ class Character():
 
 		# currently running right
 		if key[pygame.K_RIGHT]:
-			dx += 5 * SCALE_FACTOR  # Scaled movement speed
+			dx += 5 * GameConfig.SCALE_FACTOR  # Scaled movement speed
 			self.counter += 1
 			self.direction = 1
 			self.animation = "run"
 
 		# currently running left
 		if key[pygame.K_LEFT]:
-			dx -= 5 * SCALE_FACTOR  # Scaled movement speed
+			dx -= 5 * GameConfig.SCALE_FACTOR  # Scaled movement speed
 			self.counter += 1
 			self.direction = -1
 			self.animation = "run"
@@ -610,11 +610,11 @@ class Chaser(pygame.sprite.Sprite):
 	def __init__(self, x, y):
 		pygame.sprite.Sprite.__init__(self)
 		img = pygame.image.load(Config.Sprites["bird"])
-		self.image = pygame.transform.scale(img, (int(40 * SCALE_FACTOR), int(40 * SCALE_FACTOR)))
+		self.image = pygame.transform.scale(img, (int(40 * GameConfig.SCALE_FACTOR), int(40 * GameConfig.SCALE_FACTOR)))
 		self.rect = self.image.get_rect()
 		self.rect.x = x
 		self.rect.y = y
-		self.base_speed = 0.6 * SCALE_FACTOR  # Scaled base speed
+		self.base_speed = 0.6 * GameConfig.SCALE_FACTOR  # Scaled base speed
 		self.speed = self.base_speed  # Current speed
 		self.model = tf.keras.models.load_model('chaser_model.h5') if os.path.exists('chaser_model.h5') else None
 		self.buffer = []
@@ -678,7 +678,7 @@ class Game():
 		self.selected_domain = None
 		self.question_ui = None
 		self.game_menu()
-		self.score_font = pygame.font.SysFont('comicsansms', int(25 * SCALE_FACTOR))  # Scaled font size
+		self.score_font = pygame.font.SysFont('comicsansms', int(25 * GameConfig.SCALE_FACTOR))  # Scaled font size
 		self.timer_started = False  # New flag to track if timer has started
 		self.insufficient_points = False  # Flag to track if player has insufficient points
 		self.start()
@@ -689,21 +689,21 @@ class Game():
 		continue_img = pygame.image.load(Config.UI["continue"])
 		resume_img = pygame.image.load(Config.UI["resume"])
 
-		play_img = pygame.transform.scale(play_img, (int(200 * SCALE_FACTOR), int(70 * SCALE_FACTOR)))
-		quit_img = pygame.transform.scale(quit_img, (int(200 * SCALE_FACTOR), int(70 * SCALE_FACTOR)))
-		continue_img = pygame.transform.scale(continue_img, (int(200 * SCALE_FACTOR), int(70 * SCALE_FACTOR)))
-		resume_img = pygame.transform.scale(resume_img, (int(200 * SCALE_FACTOR), int(70 * SCALE_FACTOR)))
+		play_img = pygame.transform.scale(play_img, (int(200 * GameConfig.SCALE_FACTOR), int(70 * GameConfig.SCALE_FACTOR)))
+		quit_img = pygame.transform.scale(quit_img, (int(200 * GameConfig.SCALE_FACTOR), int(70 * GameConfig.SCALE_FACTOR)))
+		continue_img = pygame.transform.scale(continue_img, (int(200 * GameConfig.SCALE_FACTOR), int(70 * GameConfig.SCALE_FACTOR)))
+		resume_img = pygame.transform.scale(resume_img, (int(200 * GameConfig.SCALE_FACTOR), int(70 * GameConfig.SCALE_FACTOR)))
 
-		self.play_button = Button(screen_width // 2 - int(100 * SCALE_FACTOR), screen_height // 2, play_img)
-		self.quit_button = Button(screen_width // 2 - int(100 * SCALE_FACTOR), screen_height // 2 + int(110 * SCALE_FACTOR), quit_img)
-		self.continue_button = Button(screen_width // 2 - int(100 * SCALE_FACTOR), screen_height // 2, continue_img)
-		self.resume_button = Button(screen_width // 2 - int(100 * SCALE_FACTOR), screen_height // 2, resume_img)
+		self.play_button = Button(screen_width // 2 - int(100 * GameConfig.SCALE_FACTOR), screen_height // 2, play_img)
+		self.quit_button = Button(screen_width // 2 - int(100 * GameConfig.SCALE_FACTOR), screen_height // 2 + int(110 * GameConfig.SCALE_FACTOR), quit_img)
+		self.continue_button = Button(screen_width // 2 - int(100 * GameConfig.SCALE_FACTOR), screen_height // 2, continue_img)
+		self.resume_button = Button(screen_width // 2 - int(100 * GameConfig.SCALE_FACTOR), screen_height // 2, resume_img)
 
 		# Create domain buttons
-		domain_font = pygame.font.SysFont('comicsansms', int(32 * SCALE_FACTOR))
-		button_width = int(350 * SCALE_FACTOR)
-		button_height = int(70 * SCALE_FACTOR)
-		spacing = int(30 * SCALE_FACTOR)
+		domain_font = pygame.font.SysFont('comicsansms', int(32 * GameConfig.SCALE_FACTOR))
+		button_width = int(350 * GameConfig.SCALE_FACTOR)
+		button_height = int(70 * GameConfig.SCALE_FACTOR)
+		spacing = int(30 * GameConfig.SCALE_FACTOR)
 		start_y = screen_height // 2 - ((len(Config.DOMAINS) * (button_height + spacing)) // 2)
 		self.domain_buttons = []
 		for i, domain in enumerate(Config.DOMAINS.keys()):
@@ -757,7 +757,7 @@ class Game():
 
 	def game_timer(self):
 		global current_level
-		timer = 30
+		timer = GameConfig.LEVEL_TIME_SECONDS
 		ttext = str(timer)
 		self.timer_counter, self.timer_text = timer, ttext.rjust(3)
 		pygame.time.set_timer(pygame.USEREVENT, 1000)
@@ -800,9 +800,9 @@ class Game():
 			# setup main menu
 			if in_menu:
 				# --- Draw Game Title ---
-				title_font = pygame.font.SysFont('comicsansms', int(48 * SCALE_FACTOR))
+				title_font = pygame.font.SysFont('comicsansms', int(48 * GameConfig.SCALE_FACTOR))
 				title_text = title_font.render("🎮 MAZE RUNNER 🎮", True, (255, 215, 0))
-				title_rect = title_text.get_rect(center=(screen_width // 2, int(80 * SCALE_FACTOR)))
+				title_rect = title_text.get_rect(center=(screen_width // 2, int(80 * GameConfig.SCALE_FACTOR)))
 				screen.blit(title_text, title_rect)
 				
 				# --- Draw Rules in Compact Format ---
@@ -815,16 +815,16 @@ class Game():
 					("🏆 Legend: 32+ • ⚔️ Gladiator: 24+ • 🛡️ Warrior: 20+", 1),
 					("Use AI Assist for hints • Score 20+ to unlock Level 2!", 0)
 				]
-				rules_font = pygame.font.SysFont('comicsansms', int(22 * SCALE_FACTOR))
-				line_height = int(28 * SCALE_FACTOR)
+				rules_font = pygame.font.SysFont('comicsansms', int(22 * GameConfig.SCALE_FACTOR))
+				line_height = int(28 * GameConfig.SCALE_FACTOR)
 				total_height = len(rules) * line_height
 				
 				# Position rules in upper portion, above buttons
-				start_y = int(150 * SCALE_FACTOR)
+				start_y = int(150 * GameConfig.SCALE_FACTOR)
 				box_width = int(screen_width * 0.75)
-				box_height = total_height + int(40 * SCALE_FACTOR)
+				box_height = total_height + int(40 * GameConfig.SCALE_FACTOR)
 				box_x = (screen_width - box_width) // 2
-				box_y = start_y - int(20 * SCALE_FACTOR)
+				box_y = start_y - int(20 * GameConfig.SCALE_FACTOR)
 				
 				# Create elegant gradient background
 				rules_bg = pygame.Surface((box_width, box_height), pygame.SRCALPHA)
@@ -841,21 +841,21 @@ class Game():
 				screen.blit(rules_bg, (box_x, box_y))
 				
 				# Draw rules with better formatting
-				left_margin = box_x + int(30 * SCALE_FACTOR)
+				left_margin = box_x + int(30 * GameConfig.SCALE_FACTOR)
 				for i, (line, indent) in enumerate(rules):
 					color = (255, 255, 255) if indent == 0 else (200, 220, 255)
 					bullet_str = "▶ " if indent == 0 else "   • "
 					text = bullet_str + line
 					text_surface = rules_font.render(text, True, color)
-					x_pos = left_margin + (indent * int(20 * SCALE_FACTOR))
+					x_pos = left_margin + (indent * int(20 * GameConfig.SCALE_FACTOR))
 					y_pos = start_y + i * line_height
 					screen.blit(text_surface, (x_pos, y_pos))
 				
 				# --- Draw Buttons in Bottom Section ---
 				# Position buttons in the bottom third of the screen
-				button_y = screen_height - int(200 * SCALE_FACTOR)
+				button_y = screen_height - int(200 * GameConfig.SCALE_FACTOR)
 				self.play_button.rect.centery = button_y
-				self.quit_button.rect.centery = button_y + int(90 * SCALE_FACTOR)
+				self.quit_button.rect.centery = button_y + int(90 * GameConfig.SCALE_FACTOR)
 
 				if self.quit_button.draw(screen):
 					run = False
@@ -866,9 +866,9 @@ class Game():
 					self.timer_started = False
 			elif in_domain_select:
 				# Draw domain selection screen
-				title_font = pygame.font.SysFont('comicsansms', int(40 * SCALE_FACTOR))
+				title_font = pygame.font.SysFont('comicsansms', int(40 * GameConfig.SCALE_FACTOR))
 				title_text = title_font.render("Choose a Domain", True, (255, 215, 0))
-				title_rect = title_text.get_rect(center=(screen_width // 2, int(120 * SCALE_FACTOR)))
+				title_rect = title_text.get_rect(center=(screen_width // 2, int(120 * GameConfig.SCALE_FACTOR)))
 				screen.blit(title_text, title_rect)
 				for domain, btn in self.domain_buttons:
 					if btn.draw(screen):
@@ -914,15 +914,15 @@ class Game():
 						level_str = level_str.title()
 					else:
 						level_str = f"Level {level_str}"
-					level_font = pygame.font.SysFont('comicsansms', int(22 * SCALE_FACTOR))
+					level_font = pygame.font.SysFont('comicsansms', int(22 * GameConfig.SCALE_FACTOR))
 					level_text = level_font.render(level_str, True, (255, 255, 255))
 					# Button style background
-					padding_x = int(18 * SCALE_FACTOR)
-					padding_y = int(8 * SCALE_FACTOR)
+					padding_x = int(18 * GameConfig.SCALE_FACTOR)
+					padding_y = int(8 * GameConfig.SCALE_FACTOR)
 					button_width = level_text.get_width() + 2 * padding_x
 					button_height = level_text.get_height() + 2 * padding_y
-					button_x = timer_rect.right + int(18 * SCALE_FACTOR)
-					button_y = timer_rect.top - int(4 * SCALE_FACTOR)
+					button_x = timer_rect.right + int(18 * GameConfig.SCALE_FACTOR)
+					button_y = timer_rect.top - int(4 * GameConfig.SCALE_FACTOR)
 					button_rect = pygame.Rect(button_x, button_y, button_width, button_height)
 					# Gradient background
 					button_bg = pygame.Surface((button_width, button_height), pygame.SRCALPHA)
@@ -1037,8 +1037,8 @@ class Game():
 					subtitle = subtitle_font.render(f"Congratulations! You finished the game! Final Score: {points}", True, (255, 255, 255))
 
 					# Calculate background box size
-					padding_x = int(60 * SCALE_FACTOR)
-					padding_y = int(40 * SCALE_FACTOR)
+					padding_x = int(60 * GameConfig.SCALE_FACTOR)
+					padding_y = int(40 * GameConfig.SCALE_FACTOR)
 					box_width = max(title.get_width(), subtitle.get_width()) + 2 * padding_x
 					box_height = title.get_height() + subtitle.get_height() + 3 * padding_y
 					box_x = (screen_width - box_width) // 2
@@ -1073,17 +1073,17 @@ class Game():
 							# Get complexity from current question
 							complexity = self.question_ui.current_question.get('complexity', '').strip().lower()
 							if complexity in ['1', 'level 1']:
-								points += 3
+								points += GameConfig.POINTS['Level 1']
 							elif complexity in ['2', 'level 2']:
-								points += 5
+								points += GameConfig.POINTS['Level 2']
 							elif complexity in ['3', 'level 3']:
 								if used_ask_ai:
-									points += 6
+									points += GameConfig.POINTS['Level 3 AI']
 								else:
-									points += 8
+									points += GameConfig.POINTS['Level 3']
 							else:
 								# fallback if complexity missing
-								points += 3 if used_ask_ai else 5
+								points += GameConfig.POINTS['Level 1'] if used_ask_ai else GameConfig.POINTS['Level 2']
 						# Don't reset or unpause here - let QuestionUI handle the delay
 						# The game will automatically unpause when QuestionUI is done
 

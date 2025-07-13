@@ -10,7 +10,7 @@ import pandas as pd
 from Button import Button
 
 # Import scale factor from config
-from Config import SCALE_FACTOR
+import GameConfig
 
 class QuestionUI:
     def __init__(self, screen, sheet_name=None):
@@ -19,8 +19,8 @@ class QuestionUI:
         self.current_question = None
         self.selected_option = None
         self.buttons = []
-        self.font = pygame.font.SysFont('comicsansms', int(20 * SCALE_FACTOR))
-        self.title_font = pygame.font.SysFont('comicsansms', int(28 * SCALE_FACTOR))
+        self.font = pygame.font.SysFont('comicsansms', int(20 * GameConfig.SCALE_FACTOR))
+        self.title_font = pygame.font.SysFont('comicsansms', int(28 * GameConfig.SCALE_FACTOR))
         self.game_paused = False
         self.question_answered = False
         self.correct_answer = None
@@ -85,7 +85,7 @@ class QuestionUI:
         self.option_rects = []  # Store dynamic option rects for click/hover
         self.show_ask_ai = False  # Only show Ask AI button for last 2 platforms
         self.question_timer = 0
-        self.question_timer_max = 15  # 15 seconds
+        self.question_timer_max = GameConfig.QUESTION_TIMER_SECONDS
         self.question_timer_active = False
     
     def create_gradient_surface(self, width, height, start_color, end_color, angle=0):
@@ -103,13 +103,13 @@ class QuestionUI:
         self.buttons = []
         
         # Button dimensions and spacing
-        button_width = int(500 * SCALE_FACTOR)
-        button_height = int(60 * SCALE_FACTOR)
-        spacing = int(25 * SCALE_FACTOR)
+        button_width = int(500 * GameConfig.SCALE_FACTOR)
+        button_height = int(60 * GameConfig.SCALE_FACTOR)
+        spacing = int(25 * GameConfig.SCALE_FACTOR)
         
         # Calculate starting position to center the buttons
         start_x = (self.screen.get_width() - button_width) // 2
-        start_y = self.screen.get_height() // 2 - int(50 * SCALE_FACTOR)
+        start_y = self.screen.get_height() // 2 - int(50 * GameConfig.SCALE_FACTOR)
         
         # Create buttons for each option
         for i in range(4):
@@ -292,8 +292,8 @@ class QuestionUI:
 
     def create_ask_ai_button(self):
         # Create a surface for the button
-        button_width = int(120 * SCALE_FACTOR)
-        button_height = int(40 * SCALE_FACTOR)
+        button_width = int(120 * GameConfig.SCALE_FACTOR)
+        button_height = int(40 * GameConfig.SCALE_FACTOR)
         button_surface = pygame.Surface((button_width, button_height))
         
         # Create gradient background
@@ -317,8 +317,8 @@ class QuestionUI:
         return button
 
     def create_back_button(self):
-        button_width = int(100 * SCALE_FACTOR)
-        button_height = int(40 * SCALE_FACTOR)
+        button_width = int(100 * GameConfig.SCALE_FACTOR)
+        button_height = int(40 * GameConfig.SCALE_FACTOR)
         button_surface = pygame.Surface((button_width, button_height))
         gradient = self.create_gradient_surface(
             button_width, button_height,
@@ -384,17 +384,17 @@ class QuestionUI:
             # --- Draw Ask AI button in top right if show_ask_ai is True ---
             if self.show_ask_ai:
                 self.ask_ai_button.rect.topleft = (
-                    self.screen.get_width() - self.ask_ai_button.rect.width - int(20 * SCALE_FACTOR),
-                    int(20 * SCALE_FACTOR)
+                    self.screen.get_width() - self.ask_ai_button.rect.width - int(20 * GameConfig.SCALE_FACTOR),
+                    int(20 * GameConfig.SCALE_FACTOR)
                 )
                 self.ask_ai_button.draw(self.screen)
 
             # --- Draw Question Box (Top) ---
-            question_lines = self.wrap_text(self.current_question["question"], self.title_font, int(700 * SCALE_FACTOR))
-            question_height = len(question_lines) * self.title_font.get_height() + int(40 * SCALE_FACTOR)
-            question_box_width = int(700 * SCALE_FACTOR)
+            question_lines = self.wrap_text(self.current_question["question"], self.title_font, int(700 * GameConfig.SCALE_FACTOR))
+            question_height = len(question_lines) * self.title_font.get_height() + int(40 * GameConfig.SCALE_FACTOR)
+            question_box_width = int(700 * GameConfig.SCALE_FACTOR)
             question_box_x = (self.screen.get_width() - question_box_width) // 2
-            question_box_y = self.screen.get_height() // 2 - int(200 * SCALE_FACTOR)
+            question_box_y = self.screen.get_height() // 2 - int(200 * GameConfig.SCALE_FACTOR)
 
             # Gradient and border for question box
             question_gradient = self.create_gradient_surface(
@@ -410,15 +410,15 @@ class QuestionUI:
             for i, line in enumerate(question_lines):
                 line_surface = self.title_font.render(line, True, self.colors['text'])
                 line_rect = line_surface.get_rect(center=(self.screen.get_width() // 2,
-                                                          question_box_y + int(20 * SCALE_FACTOR) + i * self.title_font.get_height()))
+                                                          question_box_y + int(20 * GameConfig.SCALE_FACTOR) + i * self.title_font.get_height()))
                 self.screen.blit(line_surface, line_rect)
 
             # --- Draw Hint/Explanation Box (Bottom) ---
-            hint_lines = self.wrap_text(self.current_question["explanation"], self.font, int(700 * SCALE_FACTOR))
-            hint_height = len(hint_lines) * self.font.get_height() + int(40 * SCALE_FACTOR)
-            hint_box_width = int(700 * SCALE_FACTOR)
+            hint_lines = self.wrap_text(self.current_question["explanation"], self.font, int(700 * GameConfig.SCALE_FACTOR))
+            hint_height = len(hint_lines) * self.font.get_height() + int(40 * GameConfig.SCALE_FACTOR)
+            hint_box_width = int(700 * GameConfig.SCALE_FACTOR)
             hint_box_x = (self.screen.get_width() - hint_box_width) // 2
-            hint_box_y = question_box_y + question_height + int(40 * SCALE_FACTOR)
+            hint_box_y = question_box_y + question_height + int(40 * GameConfig.SCALE_FACTOR)
 
             hint_gradient = self.create_gradient_surface(
                 hint_box_width, hint_height,
@@ -433,11 +433,11 @@ class QuestionUI:
             for i, line in enumerate(hint_lines):
                 line_surface = self.font.render(line, True, self.colors['text'])
                 line_rect = line_surface.get_rect(center=(self.screen.get_width() // 2,
-                                                          hint_box_y + int(20 * SCALE_FACTOR) + i * self.font.get_height()))
+                                                          hint_box_y + int(20 * GameConfig.SCALE_FACTOR) + i * self.font.get_height()))
                 self.screen.blit(line_surface, line_rect)
 
             # Draw Back button below the hint box
-            self.back_button.rect.topleft = (hint_box_x + hint_box_width//2 - self.back_button.rect.width//2, hint_box_y + hint_height + int(30 * SCALE_FACTOR))
+            self.back_button.rect.topleft = (hint_box_x + hint_box_width//2 - self.back_button.rect.width//2, hint_box_y + hint_height + int(30 * GameConfig.SCALE_FACTOR))
             self.back_button.draw(self.screen)
             return
         if not self.active or self.current_question is None:
@@ -476,15 +476,15 @@ class QuestionUI:
         # Position Ask AI button in top right corner of game window
         if self.show_ask_ai:
             self.ask_ai_button.rect.topleft = (
-                self.screen.get_width() - self.ask_ai_button.rect.width - int(20 * SCALE_FACTOR),
-                int(20 * SCALE_FACTOR)
+                self.screen.get_width() - self.ask_ai_button.rect.width - int(20 * GameConfig.SCALE_FACTOR),
+                int(20 * GameConfig.SCALE_FACTOR)
             )
             self.ask_ai_button.draw(self.screen)
         
         # Draw question box with scale and shadow
-        question_lines = self.wrap_text(self.current_question["question"], self.title_font, int(700 * SCALE_FACTOR))
-        question_height = len(question_lines) * self.title_font.get_height() + int(40 * SCALE_FACTOR)
-        question_box_width = int(700 * SCALE_FACTOR)
+        question_lines = self.wrap_text(self.current_question["question"], self.title_font, int(700 * GameConfig.SCALE_FACTOR))
+        question_height = len(question_lines) * self.title_font.get_height() + int(40 * GameConfig.SCALE_FACTOR)
+        question_box_width = int(700 * GameConfig.SCALE_FACTOR)
         question_box_x = (self.screen.get_width() - question_box_width) // 2
         question_box_y = self.screen.get_height() // 4 - question_height // 2
 
@@ -496,7 +496,7 @@ class QuestionUI:
         scaled_y = question_box_y + (question_height - scaled_height) // 2
 
         # Draw drop shadow
-        shadow_offset = int(18 * SCALE_FACTOR)
+        shadow_offset = int(18 * GameConfig.SCALE_FACTOR)
         shadow_surf = pygame.Surface((scaled_width, scaled_height), pygame.SRCALPHA)
         shadow_surf.fill((0, 0, 0, int(self.question_box_alpha * 0.25)))
         self.screen.blit(shadow_surf, (scaled_x + shadow_offset, scaled_y + shadow_offset))
@@ -519,24 +519,24 @@ class QuestionUI:
             line_surface = self.title_font.render(line, True, self.colors['text'])
             line_surface.set_alpha(question_alpha)
             line_rect = line_surface.get_rect(center=(self.screen.get_width() // 2,
-                                                    scaled_y + int(20 * SCALE_FACTOR * scale) + i * int(self.title_font.get_height() * scale)))
+                                                    scaled_y + int(20 * GameConfig.SCALE_FACTOR * scale) + i * int(self.title_font.get_height() * scale)))
             self.screen.blit(line_surface, line_rect)
         
         # Draw options with color feedback
-        button_width = int(600 * SCALE_FACTOR * scale)
-        button_height = int(50 * SCALE_FACTOR * scale)
-        spacing = int(20 * SCALE_FACTOR * scale)
+        button_width = int(600 * GameConfig.SCALE_FACTOR * scale)
+        button_height = int(50 * GameConfig.SCALE_FACTOR * scale)
+        spacing = int(20 * GameConfig.SCALE_FACTOR * scale)
         
         self.option_rects = []  # Reset option rects each frame
         for i, option in enumerate(self.current_question["options"]):
             # Wrap option text
-            option_lines = self.wrap_text(option, self.font, button_width - int(40 * SCALE_FACTOR * scale))
-            option_height = len(option_lines) * int(self.font.get_height() * scale) + int(20 * SCALE_FACTOR * scale)
-            button_height = max(int(50 * SCALE_FACTOR * scale), option_height)
+            option_lines = self.wrap_text(option, self.font, button_width - int(40 * GameConfig.SCALE_FACTOR * scale))
+            option_height = len(option_lines) * int(self.font.get_height() * scale) + int(20 * GameConfig.SCALE_FACTOR * scale)
+            button_height = max(int(50 * GameConfig.SCALE_FACTOR * scale), option_height)
             
             # Calculate button position
             button_x = (self.screen.get_width() - button_width) // 2
-            button_y = self.screen.get_height() // 2 - int(50 * SCALE_FACTOR * scale) + i * (button_height + spacing)
+            button_y = self.screen.get_height() // 2 - int(50 * GameConfig.SCALE_FACTOR * scale) + i * (button_height + spacing)
             
             # Determine button colors based on selection state
             if self.question_answered and self.show_feedback:
@@ -586,31 +586,31 @@ class QuestionUI:
 
         # Draw feedback message
         if self.question_answered and self.show_feedback and self.feedback_timer > 0:
-            feedback_lines = self.wrap_text(self.feedback_message, self.font, int(600 * SCALE_FACTOR))
-            feedback_height = len(feedback_lines) * self.font.get_height() + int(40 * SCALE_FACTOR)
-            feedback_y = self.screen.get_height() // 2 + int(200 * SCALE_FACTOR)
+            feedback_lines = self.wrap_text(self.feedback_message, self.font, int(600 * GameConfig.SCALE_FACTOR))
+            feedback_height = len(feedback_lines) * self.font.get_height() + int(40 * GameConfig.SCALE_FACTOR)
+            feedback_y = self.screen.get_height() // 2 + int(200 * GameConfig.SCALE_FACTOR)
             
             # Create feedback surface with alpha
-            feedback_surface = pygame.Surface((int(600 * SCALE_FACTOR), feedback_height), pygame.SRCALPHA)
+            feedback_surface = pygame.Surface((int(600 * GameConfig.SCALE_FACTOR), feedback_height), pygame.SRCALPHA)
             feedback_surface.fill((0, 0, 0, int(self.feedback_alpha * 0.8)))
             
             # Draw feedback text
             for i, line in enumerate(feedback_lines):
                 text = self.font.render(line, True, self.colors['text'])
                 text.set_alpha(int(self.feedback_alpha))
-                text_rect = text.get_rect(center=(int(300 * SCALE_FACTOR), int(20 * SCALE_FACTOR) + i * self.font.get_height()))
+                text_rect = text.get_rect(center=(int(300 * GameConfig.SCALE_FACTOR), int(20 * GameConfig.SCALE_FACTOR) + i * self.font.get_height()))
                 feedback_surface.blit(text, text_rect)
             
             # Draw feedback box
-            feedback_x = (self.screen.get_width() - int(600 * SCALE_FACTOR)) // 2
+            feedback_x = (self.screen.get_width() - int(600 * GameConfig.SCALE_FACTOR)) // 2
             self.screen.blit(feedback_surface, (feedback_x, feedback_y))
 
         # Draw question timer if active
         if self.active and self.question_timer_active and not self.question_answered:
-            timer_font = pygame.font.SysFont('comicsansms', int(32 * SCALE_FACTOR))
+            timer_font = pygame.font.SysFont('comicsansms', int(32 * GameConfig.SCALE_FACTOR))
             seconds_left = max(0, int(self.question_timer // 60))
             timer_text = timer_font.render(f"Time Left: {seconds_left}s", True, (255, 100, 100))
-            timer_rect = timer_text.get_rect(center=(self.screen.get_width() // 2, scaled_y - int(40 * SCALE_FACTOR)))
+            timer_rect = timer_text.get_rect(center=(self.screen.get_width() // 2, scaled_y - int(40 * GameConfig.SCALE_FACTOR)))
             self.screen.blit(timer_text, timer_rect)
 
     def set_game_paused(self, paused):

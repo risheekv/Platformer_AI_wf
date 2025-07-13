@@ -3,9 +3,6 @@ import os
 # Get the absolute path to the project root directory
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
-# Global scale factor for the game
-SCALE_FACTOR = 0.85  # 85% of original size
-
 # ------------ Colors ------------
 
 Colors = {
