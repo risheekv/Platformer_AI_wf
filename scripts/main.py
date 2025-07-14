@@ -1,5 +1,5 @@
 import Config
-import GameConfig
+import scripts.GameConfig as GameConfig
 import Levels
 from Button import Button
 from QuestionUI import QuestionUI

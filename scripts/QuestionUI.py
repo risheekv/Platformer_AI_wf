@@ -5,6 +5,8 @@ import sys
 import random
 import math
 import pandas as pd
+import threading
+from llm_client import LLMClient
 
 # Add Button import
 from Button import Button
@@ -87,6 +89,10 @@ class QuestionUI:
         self.question_timer = 0
         self.question_timer_max = GameConfig.QUESTION_TIMER_SECONDS
         self.question_timer_active = False
+        self.llm_client = LLMClient()
+        self.ai_answer = None
+        self.ai_loading = False
+        self.ai_error = None
     
     def create_gradient_surface(self, width, height, start_color, end_color, angle=0):
         surface = pygame.Surface((width, height))
@@ -162,6 +168,9 @@ class QuestionUI:
             if event.type == pygame.MOUSEBUTTONDOWN:
                 if self.back_button.rect.collidepoint(event.pos):
                     self.showing_ai_image = False
+                    self.ai_answer = None
+                    self.ai_loading = False
+                    self.ai_error = None
                     print("Back button clicked, returning to question view.")
                     return None
             return None
@@ -182,9 +191,27 @@ class QuestionUI:
             # Check if Ask AI button was clicked
             if self.ask_ai_button.rect.collidepoint(event.pos) and not self.ask_ai_clicked:
                 self.showing_ai_image = True
-                self.load_ai_image()
                 self.ask_ai_clicked = True
-                print("Ask AI button clicked, showing image view.")
+                self.ai_answer = None
+                self.ai_loading = True
+                self.ai_error = None
+                print("Ask AI button clicked, querying LLM...")
+                # Start LLM call in a thread to avoid blocking UI
+                def fetch_ai_answer():
+                    try:
+                        q = self.current_question["question"]
+                        answer = self.llm_client.ask(q)
+                        if answer:
+                            self.ai_answer = answer
+                            self.ai_error = None
+                        else:
+                            self.ai_answer = None
+                            self.ai_error = "AI could not answer the question."
+                    except Exception as e:
+                        self.ai_answer = None
+                        self.ai_error = f"Error: {e}"
+                    self.ai_loading = False
+                threading.Thread(target=fetch_ai_answer, daemon=True).start()
                 return None
 
             # Handle option button clicks
@@ -605,6 +632,25 @@ class QuestionUI:
             feedback_x = (self.screen.get_width() - int(600 * GameConfig.SCALE_FACTOR)) // 2
             self.screen.blit(feedback_surface, (feedback_x, feedback_y))
 
+        # Draw AI answer or loading/error message
+        ai_box_width = int(700 * GameConfig.SCALE_FACTOR)
+        ai_box_height = int(200 * GameConfig.SCALE_FACTOR)
+        ai_box_x = (self.screen.get_width() - ai_box_width) // 2
+        ai_box_y = self.screen.get_height() // 2 + int(100 * GameConfig.SCALE_FACTOR)
+        pygame.draw.rect(self.screen, self.colors['border'], (ai_box_x, ai_box_y, ai_box_width, ai_box_height), 4)
+        if self.ai_loading:
+            loading_text = self.font.render("AI is thinking...", True, self.colors['text'])
+            self.screen.blit(loading_text, (ai_box_x + 20, ai_box_y + 40))
+        elif self.ai_error:
+            error_text = self.font.render(self.ai_error, True, self.colors['wrong'])
+            self.screen.blit(error_text, (ai_box_x + 20, ai_box_y + 40))
+        elif self.ai_answer:
+            # Wrap and render AI answer
+            lines = self.wrap_text(self.ai_answer, self.font, ai_box_width - 40)
+            for i, line in enumerate(lines):
+                line_surface = self.font.render(line, True, self.colors['text'])
+                self.screen.blit(line_surface, (ai_box_x + 20, ai_box_y + 30 + i * self.font.get_height()))
+        
         # Draw question timer if active
         if self.active and self.question_timer_active and not self.question_answered:
             timer_font = pygame.font.SysFont('comicsansms', int(32 * GameConfig.SCALE_FACTOR))
