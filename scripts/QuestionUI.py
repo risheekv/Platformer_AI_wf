@@ -81,6 +81,10 @@ class QuestionUI:
         # Initialize available questions
         self.reset_available_questions()
         
+        self.llm_client = LLMClient()
+        self.ai_answer = None
+        self.ai_loading = False
+        self.ai_error = None
         self.showing_ai_image = False
         self.ai_image = None
         self.ai_image_rect = None
@@ -91,10 +95,6 @@ class QuestionUI:
         self.question_timer = 0
         self.question_timer_max = GameConfig.QUESTION_TIMER_SECONDS
         self.question_timer_active = False
-        self.llm_client = LLMClient() # Initialize LLMClient
-        self.ai_answer = None
-        self.ai_loading = False
-        self.ai_error = None
     
     def create_gradient_surface(self, width, height, start_color, end_color, angle=0):
         surface = pygame.Surface((width, height))
@@ -164,18 +164,12 @@ class QuestionUI:
         self.question_box_scale = 0.92
         self.question_timer = self.question_timer_max * 60  # 60 FPS
         self.question_timer_active = True
-        self.ai_answer = None
-        self.ai_loading = False
-        self.ai_error = None
     
     def handle_events(self, event):
         if self.showing_ai_image:
             if event.type == pygame.MOUSEBUTTONDOWN:
                 if self.back_button.rect.collidepoint(event.pos):
                     self.showing_ai_image = False
-                    self.ai_answer = None
-                    self.ai_loading = False
-                    self.ai_error = None
                     print("Back button clicked, returning to question view.")
                     return None
             return None
@@ -194,15 +188,14 @@ class QuestionUI:
         # Handle mouse clicks
         if event.type == pygame.MOUSEBUTTONDOWN:
             # Check if Ask AI button was clicked
-            if self.ask_ai_button.rect.collidepoint(event.pos) and not self.ask_ai_clicked:
-                self.ask_ai_clicked = True
-                self.ai_answer = None
+            if self.ask_ai_button.rect.collidepoint(event.pos) and not self.ai_loading:
                 self.ai_loading = True
+                self.ai_answer = None
                 self.ai_error = None
                 print("Ask AI button clicked, querying LLM...")
                 def fetch_ai_answer():
                     try:
-                        q = self.current_question["question"]
+                        q = self.current_question["question"] + "\n\nAnswer in short about 2-3 lines."
                         answer = self.llm_client.ask(q)
                         if answer:
                             self.ai_answer = answer
@@ -443,55 +436,34 @@ class QuestionUI:
                                                           question_box_y + int(20 * GameConfig.SCALE_FACTOR) + i * self.title_font.get_height()))
                 self.screen.blit(line_surface, line_rect)
 
-            # --- Draw Hint/AI Answer Box (Bottom) ---
-            # If AI answer is present, show it instead of the default hint
-            if self.ai_answer:
+            # --- Draw Hint/Explanation Box (Bottom) ---
+            if self.ai_loading:
+                hint_lines = ["AI is thinking..."]
+            elif self.ai_error:
+                hint_lines = [self.ai_error]
+            elif self.ai_answer:
                 hint_lines = self.wrap_text(self.ai_answer, self.font, int(700 * GameConfig.SCALE_FACTOR))
-                label = "AI Answer"
-                label_color = (255, 255, 255)
-                box_start = self.colors['gradient_start']
-                box_end = self.colors['gradient_end']
             else:
                 hint_lines = self.wrap_text(self.current_question["explanation"], self.font, int(700 * GameConfig.SCALE_FACTOR))
-                label = "Hint"
-                label_color = (255, 255, 255)
-                box_start = self.colors['option_gradient_start']
-                box_end = self.colors['option_gradient_end']
-            hint_height = len(hint_lines) * self.font.get_height() + int(60 * GameConfig.SCALE_FACTOR)
+            hint_height = len(hint_lines) * self.font.get_height() + int(40 * GameConfig.SCALE_FACTOR)
             hint_box_width = int(700 * GameConfig.SCALE_FACTOR)
             hint_box_x = (self.screen.get_width() - hint_box_width) // 2
             hint_box_y = question_box_y + question_height + int(40 * GameConfig.SCALE_FACTOR)
 
-            # Draw drop shadow for the box
-            shadow_offset = int(10 * GameConfig.SCALE_FACTOR)
-            shadow_surf = pygame.Surface((hint_box_width, hint_height), pygame.SRCALPHA)
-            shadow_surf.fill((0, 0, 0, 60))
-            self.screen.blit(shadow_surf, (hint_box_x + shadow_offset, hint_box_y + shadow_offset))
-
-            # Create animated gradient for the box
             hint_gradient = self.create_gradient_surface(
                 hint_box_width, hint_height,
-                box_start,
-                box_end,
+                self.colors['option_gradient_start'],
+                self.colors['option_gradient_end'],
                 math.sin(self.animation_time) * 45
             )
             self.screen.blit(hint_gradient, (hint_box_x, hint_box_y))
             pygame.draw.rect(self.screen, self.colors['border'], (hint_box_x, hint_box_y, hint_box_width, hint_height), 4)
 
-            # Draw label at the top of the box
-            label_font = pygame.font.SysFont('comicsansms', int(24 * GameConfig.SCALE_FACTOR), bold=True)
-            label_surface = label_font.render(label, True, label_color)
-            label_bg = pygame.Surface((hint_box_width, int(36 * GameConfig.SCALE_FACTOR)), pygame.SRCALPHA)
-            label_bg.fill((0, 0, 0, 80))
-            self.screen.blit(label_bg, (hint_box_x, hint_box_y))
-            label_rect = label_surface.get_rect(center=(hint_box_x + hint_box_width // 2, hint_box_y + int(18 * GameConfig.SCALE_FACTOR)))
-            self.screen.blit(label_surface, label_rect)
-
-            # Draw wrapped hint or AI answer text, slightly lower to make space for label
+            # Draw wrapped hint text
             for i, line in enumerate(hint_lines):
                 line_surface = self.font.render(line, True, self.colors['text'])
                 line_rect = line_surface.get_rect(center=(self.screen.get_width() // 2,
-                                                          hint_box_y + int(36 * GameConfig.SCALE_FACTOR) + int(20 * GameConfig.SCALE_FACTOR) + i * self.font.get_height()))
+                                                          hint_box_y + int(20 * GameConfig.SCALE_FACTOR) + i * self.font.get_height()))
                 self.screen.blit(line_surface, line_rect)
 
             # Draw Back button below the hint box
