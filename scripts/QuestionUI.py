@@ -578,9 +578,9 @@ class QuestionUI:
             overlay = pygame.Surface((self.screen.get_width(), self.screen.get_height()), pygame.SRCALPHA)
             overlay.fill((0, 0, 0, 180))
             self.screen.blit(overlay, (0, 0))
-            # Modal dimensions
-            modal_width = int(800 * GameConfig.SCALE_FACTOR)
-            modal_height = int(400 * GameConfig.SCALE_FACTOR)
+            # Modal dimensions (increased)
+            modal_width = int(950 * GameConfig.SCALE_FACTOR)
+            modal_height = int(540 * GameConfig.SCALE_FACTOR)
             modal_x = (self.screen.get_width() - modal_width) // 2
             modal_y = (self.screen.get_height() - modal_height) // 2
             # Modal background with rounded corners and drop shadow
@@ -594,9 +594,9 @@ class QuestionUI:
             self.screen.blit(modal_bg_rounded, (modal_x, modal_y))
             pygame.draw.rect(self.screen, self.colors['border'], (modal_x, modal_y, modal_width, modal_height), 4, border_radius=18)
             # Question box
-            q_box_height = int(modal_height * 0.4)
-            q_box_y = modal_y + int(28 * GameConfig.SCALE_FACTOR)
-            q_box = pygame.Rect(modal_x + int(36 * GameConfig.SCALE_FACTOR), q_box_y, modal_width - int(72 * GameConfig.SCALE_FACTOR), q_box_height)
+            q_box_height = int(modal_height * 0.32)
+            q_box_y = modal_y + int(32 * GameConfig.SCALE_FACTOR)
+            q_box = pygame.Rect(modal_x + int(44 * GameConfig.SCALE_FACTOR), q_box_y, modal_width - int(88 * GameConfig.SCALE_FACTOR), q_box_height)
             q_gradient = self.create_gradient_surface(q_box.width, q_box.height, self.colors['option_gradient_start'], self.colors['option_gradient_end'])
             q_box_surf = pygame.Surface((q_box.width, q_box.height), pygame.SRCALPHA)
             q_box_surf.blit(q_gradient, (0, 0))
@@ -607,10 +607,10 @@ class QuestionUI:
                 line_surface = self.title_font.render(line, True, self.colors['text'])
                 line_rect = line_surface.get_rect(midtop=(q_box.centerx, q_box.y + 24 + i * self.title_font.get_height()))
                 self.screen.blit(line_surface, line_rect)
-            # AI response box
-            a_box_height = int(modal_height * 0.4)
-            a_box_y = q_box_y + q_box_height + int(32 * GameConfig.SCALE_FACTOR)
-            a_box = pygame.Rect(modal_x + int(36 * GameConfig.SCALE_FACTOR), a_box_y, modal_width - int(72 * GameConfig.SCALE_FACTOR), a_box_height)
+            # AI response box (increased height)
+            a_box_height = int(modal_height * 0.44)
+            a_box_y = q_box_y + q_box_height + int(36 * GameConfig.SCALE_FACTOR)
+            a_box = pygame.Rect(modal_x + int(44 * GameConfig.SCALE_FACTOR), a_box_y, modal_width - int(88 * GameConfig.SCALE_FACTOR), a_box_height)
             a_gradient = self.create_gradient_surface(a_box.width, a_box.height, self.colors['hover_gradient_start'], self.colors['hover_gradient_end'])
             a_box_surf = pygame.Surface((a_box.width, a_box.height), pygame.SRCALPHA)
             a_box_surf.blit(a_gradient, (0, 0))
@@ -628,8 +628,8 @@ class QuestionUI:
                 line_surface = self.font.render(line, True, self.colors['text'])
                 line_rect = line_surface.get_rect(midtop=(a_box.centerx, a_box.y + 24 + i * self.font.get_height()))
                 self.screen.blit(line_surface, line_rect)
-            # Back button styled to match theme
-            self.back_button.rect.topleft = (modal_x + modal_width//2 - self.back_button.rect.width//2, modal_y + modal_height - int(70 * GameConfig.SCALE_FACTOR))
+            # Back button at the bottom of the modal
+            self.back_button.rect.topleft = (modal_x + modal_width//2 - self.back_button.rect.width//2, modal_y + modal_height - int(48 * GameConfig.SCALE_FACTOR))
             self.back_button.draw(self.screen)
             return
 
