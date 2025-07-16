@@ -71,6 +71,9 @@ class QuestionUI:
         
         # Create Ask AI button
         self.ask_ai_button = self.create_ask_ai_button()
+        self.hint_button = self.create_hint_button()
+        self.showing_hint_popup = False
+        self.hint_clicked = False
         
         # Create option buttons
         self.create_buttons()
@@ -135,12 +138,16 @@ class QuestionUI:
         self.available_questions = list(range(len(self.questions)))
         random.shuffle(self.available_questions)
 
-    def show_random_question(self, show_ask_ai=False):
-        """Show a random question that hasn't been asked recently. show_ask_ai: only show Ask AI button if True."""
+    def show_random_question(self, show_ask_ai=False, level_key=None):
+        """Show a random question that hasn't been asked recently. show_ask_ai: only show Ask AI button if True. level_key: level string for per-level config."""
         self.active = True
         self.game_paused = True
         self.question_answered = False
-        self.show_ask_ai = show_ask_ai
+        # Only use per-level config for Ask AI button
+        if level_key is not None:
+            self.show_ask_ai = show_ask_ai and GameConfig.SHOW_AI_BUTTON_LEVELS.get(level_key, False)
+        else:
+            self.show_ask_ai = False
         
         # If we've used all questions, reset the pool
         if not self.available_questions:
@@ -171,13 +178,20 @@ class QuestionUI:
             # Create a new event with adjusted pos (pygame.event.Event is immutable, so create a new one)
             adj_event = pygame.event.Event(event.type, {**event.__dict__, 'pos': adj_pos})
         # If Ask AI modal is open, only handle Back button
-        if self.showing_ai_popup:
+        if self.showing_ai_popup and GameConfig.SHOW_AI_BUTTON:
             if adj_event.type == pygame.MOUSEBUTTONDOWN:
                 if self.back_button.rect.collidepoint(adj_event.pos):
                     self.showing_ai_popup = False
                     self.ai_answer = None
                     self.ai_loading = False
                     self.ai_error = None
+                    return None
+            return None
+        if self.showing_hint_popup:
+            if adj_event.type == pygame.MOUSEBUTTONDOWN:
+                if self.back_button.rect.collidepoint(adj_event.pos):
+                    self.showing_hint_popup = False
+                    self.hint_clicked = False
                     return None
             return None
         if not self.active or self.question_answered:
@@ -194,8 +208,29 @@ class QuestionUI:
 
         # Handle mouse clicks
         if adj_event.type == pygame.MOUSEBUTTONDOWN:
-            # Check if Ask AI button was clicked
-            if self.ask_ai_button.rect.collidepoint(adj_event.pos) and not self.ai_loading:
+            # Determine level for per-level config
+            level_str = str(self.current_level).strip().lower()
+            if level_str.startswith('level'):
+                level_key = level_str.replace(' ', '_')
+            else:
+                level_key = f'level_{level_str}' if level_str else 'level_1'
+            # Check if Hint button is available and clicked
+            if (
+                GameConfig.SHOW_HINT_BUTTON
+                and GameConfig.SHOW_HINT_BUTTON_LEVELS.get(level_key, True)
+                and self.current_question and self.current_question.get('explanation', '').strip()
+            ):
+                if self.hint_button.rect.collidepoint(adj_event.pos):
+                    self.showing_hint_popup = True
+                    self.hint_clicked = True
+                    return None
+
+            # Check if Ask AI button is available and clicked
+            if (
+                self.show_ask_ai
+                and self.ask_ai_button.rect.collidepoint(adj_event.pos)
+                and not self.ai_loading
+            ):
                 self.ai_loading = True
                 self.ai_answer = None
                 self.ai_error = None
@@ -347,6 +382,23 @@ class QuestionUI:
         button = Button(0, 0, button_surface)  # Initial position, will be updated in draw
         return button
 
+    def create_hint_button(self):
+        button_width = int(120 * GameConfig.SCALE_FACTOR)
+        button_height = int(40 * GameConfig.SCALE_FACTOR)
+        button_surface = pygame.Surface((button_width, button_height))
+        gradient = self.create_gradient_surface(
+            button_width, button_height,
+            self.colors['gradient_start'],
+            self.colors['gradient_end']
+        )
+        button_surface.blit(gradient, (0, 0))
+        pygame.draw.rect(button_surface, self.colors['border'], button_surface.get_rect(), 2)
+        text = self.font.render("Hint", True, self.colors['text'])
+        text_rect = text.get_rect(center=(button_width//2, button_height//2))
+        button_surface.blit(text, text_rect)
+        button = Button(0, 0, button_surface)
+        return button
+
     def create_back_button(self):
         button_width = int(100 * GameConfig.SCALE_FACTOR)
         button_height = int(40 * GameConfig.SCALE_FACTOR)
@@ -438,12 +490,33 @@ class QuestionUI:
             self.question_box_alpha = 0
             self.question_box_scale = 0.92
         
-        # Position Ask AI button in top right corner of game window
-        if self.show_ask_ai:
-            self.ask_ai_button.rect.topleft = (
-                self.screen.get_width() - self.ask_ai_button.rect.width - int(20 * GameConfig.SCALE_FACTOR),
-                int(20 * GameConfig.SCALE_FACTOR)
+        # Draw Hint button if hint is available
+        # Determine level for per-level config
+        level_str = str(self.current_level).strip().lower()
+        if level_str.startswith('level'):
+            level_key = level_str.replace(' ', '_')
+        else:
+            level_key = f'level_{level_str}' if level_str else 'level_1'
+        # Per-level and global config for Hint button
+        hint_available = (
+            GameConfig.SHOW_HINT_BUTTON
+            and GameConfig.SHOW_HINT_BUTTON_LEVELS.get(level_key, True)
+            and self.current_question.get('explanation', '').strip() != ''
+        )
+        ai_button_x = self.screen.get_width() - self.ask_ai_button.rect.width - int(20 * GameConfig.SCALE_FACTOR)
+        ai_button_y = int(20 * GameConfig.SCALE_FACTOR)
+        if hint_available:
+            self.hint_button.rect.topleft = (
+                ai_button_x - self.hint_button.rect.width - int(12 * GameConfig.SCALE_FACTOR),
+                ai_button_y
             )
+            self.hint_button.draw(self.screen)
+        # Draw Ask AI button if enabled (global and per-level)
+        ai_available = (
+            self.show_ask_ai
+        )
+        if ai_available:
+            self.ask_ai_button.rect.topleft = (ai_button_x, ai_button_y)
             self.ask_ai_button.draw(self.screen)
         
         # Draw question box with scale and shadow
@@ -640,6 +713,39 @@ class QuestionUI:
             self.back_button.draw(self.screen)
             return
 
+        # Draw Hint modal popup if showing
+        if self.showing_hint_popup:
+            overlay = pygame.Surface((self.screen.get_width(), self.screen.get_height()), pygame.SRCALPHA)
+            overlay.fill((0, 0, 0, 180))
+            self.screen.blit(overlay, (0, 0))
+            # Modal dimensions
+            modal_width = int(700 * GameConfig.SCALE_FACTOR)
+            modal_height = int(300 * GameConfig.SCALE_FACTOR)
+            modal_x = (self.screen.get_width() - modal_width) // 2
+            modal_y = (self.screen.get_height() - modal_height) // 2
+            # Modal background
+            shadow = pygame.Surface((modal_width + 24, modal_height + 24), pygame.SRCALPHA)
+            pygame.draw.rect(shadow, (0, 0, 0, 80), shadow.get_rect(), border_radius=24)
+            self.screen.blit(shadow, (modal_x - 12, modal_y - 12))
+            modal_bg = self.create_gradient_surface(modal_width, modal_height, self.colors['gradient_start'], self.colors['gradient_end'])
+            modal_bg_rounded = pygame.Surface((modal_width, modal_height), pygame.SRCALPHA)
+            modal_bg_rounded.blit(modal_bg, (0, 0))
+            pygame.draw.rect(modal_bg_rounded, (0, 0, 0, 0), (0, 0, modal_width, modal_height), border_radius=18)
+            self.screen.blit(modal_bg_rounded, (modal_x, modal_y))
+            pygame.draw.rect(self.screen, self.colors['border'], (modal_x, modal_y, modal_width, modal_height), 4, border_radius=18)
+            # Hint text
+            hint_text = self.current_question.get('explanation', '').strip()
+            hint_lines = self.wrap_text(hint_text, self.font, modal_width - 60)
+            for i, line in enumerate(hint_lines):
+                line_surface = self.font.render(line, True, self.colors['text'])
+                line_rect = line_surface.get_rect(center=(self.screen.get_width() // 2, modal_y + 60 + i * self.font.get_height()))
+                self.screen.blit(line_surface, line_rect)
+            # Back button
+            back_btn_y = modal_y + modal_height - self.back_button.rect.height - int(24 * GameConfig.SCALE_FACTOR)
+            self.back_button.rect.topleft = (modal_x + modal_width//2 - self.back_button.rect.width//2, back_btn_y)
+            self.back_button.draw(self.screen)
+            return
+
     def set_game_paused(self, paused):
         self.game_paused = paused 
 
@@ -680,7 +786,13 @@ class QuestionUI:
         self.active = True
         self.game_paused = True
         self.question_answered = False
-        self.show_ask_ai = show_ask_ai
+        # Only use per-level config for Ask AI button
+        level_str = str(complexity).strip().lower()
+        if level_str.startswith('level'):
+            level_key = level_str.replace(' ', '_')
+        else:
+            level_key = f'level_{level_str}' if level_str else 'level_1'
+        self.show_ask_ai = show_ask_ai and GameConfig.SHOW_AI_BUTTON_LEVELS.get(level_key, False)
         self.current_level = complexity  # Store the current level
 
         # Filter available questions by complexity and not already asked

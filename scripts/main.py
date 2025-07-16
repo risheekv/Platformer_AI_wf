@@ -111,7 +111,7 @@ class Platform(pygame.sprite.Sprite):
 		self.rect.y = y
 
 		self.move_direction = 1
-		self.move_counter = random.randint(0, 40)
+		self.move_counter = random.randint(0, 20)
 
 		self.move_x = move_x # flag to move in x direction
 		self.move_y = move_y # flag to move in y direction
@@ -632,7 +632,7 @@ class Chaser(pygame.sprite.Sprite):
 		self.max_buffer_size = 1000
 		self.training_enabled = False  # Disable training during gameplay
 		self.start_time = pygame.time.get_ticks()  # Record start time
-		self.delay = 20000  # 20 seconds delay in milliseconds
+		self.delay = GameConfig.CHASER_DELAY_MS  # Use config value for delay
 		self.is_active = False  # Flag to track if chaser is active
 		self.paused_time = 0  # Track time spent paused
 		self.last_pause_time = 0  # Track when we last paused
@@ -779,6 +779,7 @@ class Game():
 			self.chaser.is_active = False
 			self.chaser.paused_time = 0  # Reset paused time
 			self.chaser.last_pause_time = 0  # Reset last pause time
+			self.chaser.delay = GameConfig.CHASER_DELAY_MS  # Ensure delay is always set from config
 
 	def start(self):
 		global in_menu
@@ -797,9 +798,46 @@ class Game():
 		self.chaser = chaser  # Store chaser reference
 
 		run = True
+		# Create a gradient background surface for the full display size
+		gradient_bg = pygame.Surface((display_width, display_height))
+		# Sky blue gradient: top is light blue, bottom is deeper blue
+		top_color = (135, 206, 250)    # Light sky blue (top)
+		bottom_color = (70, 130, 180)  # Steel blue (bottom)
+		for y in range(display_height):
+			ratio = y / display_height
+			r = int(top_color[0] * (1 - ratio) + bottom_color[0] * ratio)
+			g = int(top_color[1] * (1 - ratio) + bottom_color[1] * ratio)
+			b = int(top_color[2] * (1 - ratio) + bottom_color[2] * ratio)
+			pygame.draw.line(gradient_bg, (r, g, b), (0, y), (display_width, y))
+		# Add subtle clouds
+		cloud_colors = [
+			(255, 255, 255, 38), (245, 245, 245, 32), (230, 240, 255, 26), (255, 255, 255, 18)
+		]
+		num_clouds = max(10, display_width // 160)
+		for _ in range(num_clouds):
+			cw = random.randint(180, 320)
+			ch = random.randint(60, 110)
+			cloud_surface = pygame.Surface((cw, ch), pygame.SRCALPHA)
+			base_x = random.randint(0, display_width - cw)
+			base_y = random.randint(20, int(display_height * 0.45))
+			# Draw 3-5 overlapping ellipses for a soft cloud
+			for _ in range(random.randint(3, 5)):
+				ellipse_w = random.randint(int(cw * 0.4), cw)
+				ellipse_h = random.randint(int(ch * 0.5), ch)
+				ellipse_x = random.randint(-20, cw - ellipse_w + 20)
+				ellipse_y = random.randint(0, int(ch * 0.5))
+				color = random.choice(cloud_colors)
+				pygame.draw.ellipse(cloud_surface, color, (ellipse_x, ellipse_y, ellipse_w, ellipse_h))
+			# Add a gentle vertical alpha fade to the cloud for realism
+			fade = pygame.Surface((cw, ch), pygame.SRCALPHA)
+			for y in range(ch):
+				fade_alpha = int(255 * (1 - (y / ch))**1.5)  # More transparent at bottom
+				pygame.draw.line(fade, (255, 255, 255, fade_alpha), (0, y), (cw, y))
+			cloud_surface.blit(fade, (0, 0), special_flags=pygame.BLEND_RGBA_MULT)
+			gradient_bg.blit(cloud_surface, (base_x, base_y), special_flags=pygame.BLEND_PREMULTIPLIED)
 		while(run):
-			# Fill the full window with black
-			screen.fill((0, 0, 0))
+			# Draw the gradient background
+			screen.blit(gradient_bg, (0, 0))
 			# Clear the game surface (optional, for transparency)
 			game_surface.fill((0, 0, 0))
 			world.draw_world()
@@ -891,8 +929,9 @@ class Game():
 				world.draw_tiles()
 				check_points[0].draw(game_surface)
 				lava_tiles[0].draw(game_surface)
+				# Draw platforms and labels, then player (so player overlaps label)
+				draw_platforms_with_labels(game_surface, self.score_font, draw_labels_only=False)
 				player.draw_player(game_surface, self.question_ui.is_game_paused())
-				plats[0].draw(game_surface)
 				chaser.update(player, self.question_ui.is_game_paused())
 				if not self.question_ui.is_game_paused():
 					plats[0].update()
@@ -952,14 +991,19 @@ class Game():
 					platform_list = list(plats[0])
 					for idx, platform in enumerate(platform_list):
 						# Check if player is on top of the platform with a small tolerance
-						if (not platform.question_shown and 
+						# For platform index 2, make the right edge more sensitive
+						if idx == 2:
+							right_margin = 18  # Increase margin for right edge sensitivity
+						else:
+							right_margin = 5
+						if (
+							not platform.question_shown and 
 							abs(player.rect.bottom - platform.rect.top) <= 2 and  # Small tolerance for exact position
 							player.rect.right > platform.rect.left + 5 and   # Small margin from edges
-							player.rect.left < platform.rect.right - 5 and
-							not player.in_air):  # Player is not jumping/falling
-							
+							player.rect.left < platform.rect.right - right_margin and
+							not player.in_air
+						):
 							platform.question_shown = True
-							show_ask_ai = (idx == 3 or idx == 5)
 							# Select question complexity based on platform index
 							if idx in [2, 4]:
 								complexity = 'Level 1'
@@ -969,7 +1013,7 @@ class Game():
 								complexity = 'Level 3'
 							else:
 								complexity = ''  # fallback: any
-							self.question_ui.show_random_question_by_complexity(complexity, show_ask_ai=show_ask_ai)
+							self.question_ui.show_random_question_by_complexity(complexity, show_ask_ai=True)
 							self.question_ui.set_game_paused(True)
 
 				# Draw question UI if active
@@ -1145,6 +1189,58 @@ class Game():
 			surf_y = (display_height - GAME_SURFACE_HEIGHT) // 2
 			screen.blit(game_surface, (surf_x, surf_y))
 			pygame.display.update()
+			self.clock.tick(self.fps)
+
+def draw_platforms_with_labels(surface, font, draw_labels_only=False):
+    """
+    Draw all platforms and overlay a modern, color-coded level label above each platform.
+    If draw_labels_only is True, only draw the labels (not the platforms).
+    """
+    import pygame
+    import GameConfig
+    # Define color mapping for levels
+    level_colors = {
+        'Level 1': ((41, 128, 185), (142, 68, 173)),   # Blue to purple
+        'Level 2': ((39, 174, 96), (241, 196, 15)),    # Green to yellow
+        'Level 3': ((192, 57, 43), (211, 84, 0)),      # Red to orange
+    }
+    # Platform index to level mapping
+    def get_level_label(idx):
+        if idx in [2, 4]:
+            return 'Level 1'
+        elif idx in [0, 1]:
+            return 'Level 2'
+        elif idx in [3, 5]:
+            return 'Level 3'
+        else:
+            return ''
+    platform_list = list(plats[0]) if plats and len(plats) > 0 else []
+    if not draw_labels_only:
+        for idx, platform in enumerate(platform_list):
+            platform.draw(surface)
+    for idx, platform in enumerate(platform_list):
+        label = get_level_label(idx)
+        if label:
+            color1, color2 = level_colors[label]
+            label_font = font
+            label_text = label_font.render(label, True, (255, 255, 255))
+            padding_x = int(6 * GameConfig.SCALE_FACTOR)
+            padding_y = int(2 * GameConfig.SCALE_FACTOR)
+            label_width = label_text.get_width() + 2 * padding_x
+            label_height = label_text.get_height() + 2 * padding_y
+            label_x = platform.rect.centerx - label_width // 2
+            label_y = platform.rect.top - label_height - 4
+            label_bg = pygame.Surface((label_width, label_height), pygame.SRCALPHA)
+            for y in range(label_height):
+                ratio = y / label_height
+                r = int(color1[0] * (1 - ratio) + color2[0] * ratio)
+                g = int(color1[1] * (1 - ratio) + color2[1] * ratio)
+                b = int(color1[2] * (1 - ratio) + color2[2] * ratio)
+                pygame.draw.line(label_bg, (r, g, b), (0, y), (label_width, y))
+            pygame.draw.rect(label_bg, (255, 255, 255, 80), label_bg.get_rect(), 2, border_radius=8)
+            surface.blit(label_bg, (label_x, label_y))
+            text_rect = label_text.get_rect(center=(platform.rect.centerx, label_y + label_height // 2))
+            surface.blit(label_text, text_rect)
 
 # Start the game
 try:
