@@ -85,9 +85,7 @@ class QuestionUI:
         self.ai_answer = None
         self.ai_loading = False
         self.ai_error = None
-        self.showing_ai_image = False
-        self.ai_image = None
-        self.ai_image_rect = None
+        self.showing_ai_popup = False
         self.back_button = self.create_back_button()
         self.ask_ai_clicked = False
         self.option_rects = []  # Store dynamic option rects for click/hover
@@ -166,11 +164,14 @@ class QuestionUI:
         self.question_timer_active = True
     
     def handle_events(self, event):
-        if self.showing_ai_image:
+        # If Ask AI modal is open, only handle Back button
+        if self.showing_ai_popup:
             if event.type == pygame.MOUSEBUTTONDOWN:
                 if self.back_button.rect.collidepoint(event.pos):
-                    self.showing_ai_image = False
-                    print("Back button clicked, returning to question view.")
+                    self.showing_ai_popup = False
+                    self.ai_answer = None
+                    self.ai_loading = False
+                    self.ai_error = None
                     return None
             return None
         if not self.active or self.question_answered:
@@ -192,6 +193,7 @@ class QuestionUI:
                 self.ai_loading = True
                 self.ai_answer = None
                 self.ai_error = None
+                self.showing_ai_popup = True
                 print("Ask AI button clicked, querying LLM...")
                 def fetch_ai_answer():
                     try:
@@ -374,8 +376,8 @@ class QuestionUI:
                 new_width = int(img_width * scale)
                 new_height = int(img_height * scale)
                 img = pygame.transform.scale(img, (new_width, new_height))
-                self.ai_image = img
-                self.ai_image_rect = img.get_rect(center=(screen_width // 2, screen_height // 2))
+                # self.ai_image = img # This line was removed as per the edit hint
+                # self.ai_image_rect = img.get_rect(center=(screen_width // 2, screen_height // 2)) # This line was removed as per the edit hint
                 print(f"Successfully loaded image: {image_path}, size: {img.get_width()}x{img.get_height()}")
             except Exception as e:
                 print(f"Error loading image: {self.current_question['image_path']}")
@@ -397,79 +399,6 @@ class QuestionUI:
                 self.question_timer_active = False
 
     def draw(self):
-        if self.showing_ai_image:
-            # Draw overlay
-            if self.overlay_alpha < 200:
-                self.overlay_alpha = min(200, self.overlay_alpha + 40)
-            self.overlay.set_alpha(self.overlay_alpha)
-            self.screen.blit(self.overlay, (0, 0))
-
-            # --- Draw Ask AI button in top right if show_ask_ai is True ---
-            if self.show_ask_ai:
-                self.ask_ai_button.rect.topleft = (
-                    self.screen.get_width() - self.ask_ai_button.rect.width - int(20 * GameConfig.SCALE_FACTOR),
-                    int(20 * GameConfig.SCALE_FACTOR)
-                )
-                self.ask_ai_button.draw(self.screen)
-
-            # --- Draw Question Box (Top) ---
-            question_lines = self.wrap_text(self.current_question["question"], self.title_font, int(700 * GameConfig.SCALE_FACTOR))
-            question_height = len(question_lines) * self.title_font.get_height() + int(40 * GameConfig.SCALE_FACTOR)
-            question_box_width = int(700 * GameConfig.SCALE_FACTOR)
-            question_box_x = (self.screen.get_width() - question_box_width) // 2
-            question_box_y = self.screen.get_height() // 2 - int(200 * GameConfig.SCALE_FACTOR)
-
-            # Gradient and border for question box
-            question_gradient = self.create_gradient_surface(
-                question_box_width, question_height,
-                self.colors['gradient_start'],
-                self.colors['gradient_end'],
-                math.sin(self.animation_time) * 45
-            )
-            self.screen.blit(question_gradient, (question_box_x, question_box_y))
-            pygame.draw.rect(self.screen, self.colors['border'], (question_box_x, question_box_y, question_box_width, question_height), 4)
-
-            # Draw wrapped question text
-            for i, line in enumerate(question_lines):
-                line_surface = self.title_font.render(line, True, self.colors['text'])
-                line_rect = line_surface.get_rect(center=(self.screen.get_width() // 2,
-                                                          question_box_y + int(20 * GameConfig.SCALE_FACTOR) + i * self.title_font.get_height()))
-                self.screen.blit(line_surface, line_rect)
-
-            # --- Draw Hint/Explanation Box (Bottom) ---
-            if self.ai_loading:
-                hint_lines = ["AI is thinking..."]
-            elif self.ai_error:
-                hint_lines = [self.ai_error]
-            elif self.ai_answer:
-                hint_lines = self.wrap_text(self.ai_answer, self.font, int(700 * GameConfig.SCALE_FACTOR))
-            else:
-                hint_lines = self.wrap_text(self.current_question["explanation"], self.font, int(700 * GameConfig.SCALE_FACTOR))
-            hint_height = len(hint_lines) * self.font.get_height() + int(40 * GameConfig.SCALE_FACTOR)
-            hint_box_width = int(700 * GameConfig.SCALE_FACTOR)
-            hint_box_x = (self.screen.get_width() - hint_box_width) // 2
-            hint_box_y = question_box_y + question_height + int(40 * GameConfig.SCALE_FACTOR)
-
-            hint_gradient = self.create_gradient_surface(
-                hint_box_width, hint_height,
-                self.colors['option_gradient_start'],
-                self.colors['option_gradient_end'],
-                math.sin(self.animation_time) * 45
-            )
-            self.screen.blit(hint_gradient, (hint_box_x, hint_box_y))
-            pygame.draw.rect(self.screen, self.colors['border'], (hint_box_x, hint_box_y, hint_box_width, hint_height), 4)
-
-            # Draw wrapped hint text
-            for i, line in enumerate(hint_lines):
-                line_surface = self.font.render(line, True, self.colors['text'])
-                line_rect = line_surface.get_rect(center=(self.screen.get_width() // 2,
-                                                          hint_box_y + int(20 * GameConfig.SCALE_FACTOR) + i * self.font.get_height()))
-                self.screen.blit(line_surface, line_rect)
-
-            # Draw Back button below the hint box
-            self.back_button.rect.topleft = (hint_box_x + hint_box_width//2 - self.back_button.rect.width//2, hint_box_y + hint_height + int(30 * GameConfig.SCALE_FACTOR))
-            self.back_button.draw(self.screen)
-            return
         if not self.active or self.current_question is None:
             return
             
@@ -642,6 +571,67 @@ class QuestionUI:
             timer_text = timer_font.render(f"Time Left: {seconds_left}s", True, (255, 100, 100))
             timer_rect = timer_text.get_rect(center=(self.screen.get_width() // 2, scaled_y - int(40 * GameConfig.SCALE_FACTOR)))
             self.screen.blit(timer_text, timer_rect)
+
+        # If Ask AI modal is open, draw modal overlay with two boxes and Back button
+        if self.showing_ai_popup:
+            # Dim the background
+            overlay = pygame.Surface((self.screen.get_width(), self.screen.get_height()), pygame.SRCALPHA)
+            overlay.fill((0, 0, 0, 180))
+            self.screen.blit(overlay, (0, 0))
+            # Modal dimensions
+            modal_width = int(800 * GameConfig.SCALE_FACTOR)
+            modal_height = int(400 * GameConfig.SCALE_FACTOR)
+            modal_x = (self.screen.get_width() - modal_width) // 2
+            modal_y = (self.screen.get_height() - modal_height) // 2
+            # Modal background with rounded corners and drop shadow
+            shadow = pygame.Surface((modal_width + 24, modal_height + 24), pygame.SRCALPHA)
+            pygame.draw.rect(shadow, (0, 0, 0, 80), shadow.get_rect(), border_radius=24)
+            self.screen.blit(shadow, (modal_x - 12, modal_y - 12))
+            modal_bg = self.create_gradient_surface(modal_width, modal_height, self.colors['gradient_start'], self.colors['gradient_end'])
+            modal_bg_rounded = pygame.Surface((modal_width, modal_height), pygame.SRCALPHA)
+            modal_bg_rounded.blit(modal_bg, (0, 0))
+            pygame.draw.rect(modal_bg_rounded, (0, 0, 0, 0), (0, 0, modal_width, modal_height), border_radius=18)
+            self.screen.blit(modal_bg_rounded, (modal_x, modal_y))
+            pygame.draw.rect(self.screen, self.colors['border'], (modal_x, modal_y, modal_width, modal_height), 4, border_radius=18)
+            # Question box
+            q_box_height = int(modal_height * 0.4)
+            q_box_y = modal_y + int(28 * GameConfig.SCALE_FACTOR)
+            q_box = pygame.Rect(modal_x + int(36 * GameConfig.SCALE_FACTOR), q_box_y, modal_width - int(72 * GameConfig.SCALE_FACTOR), q_box_height)
+            q_gradient = self.create_gradient_surface(q_box.width, q_box.height, self.colors['option_gradient_start'], self.colors['option_gradient_end'])
+            q_box_surf = pygame.Surface((q_box.width, q_box.height), pygame.SRCALPHA)
+            q_box_surf.blit(q_gradient, (0, 0))
+            pygame.draw.rect(q_box_surf, self.colors['border'], q_box_surf.get_rect(), 2, border_radius=12)
+            self.screen.blit(q_box_surf, (q_box.x, q_box.y))
+            q_lines = self.wrap_text(self.current_question["question"], self.title_font, q_box.width - 40)
+            for i, line in enumerate(q_lines):
+                line_surface = self.title_font.render(line, True, self.colors['text'])
+                line_rect = line_surface.get_rect(midtop=(q_box.centerx, q_box.y + 24 + i * self.title_font.get_height()))
+                self.screen.blit(line_surface, line_rect)
+            # AI response box
+            a_box_height = int(modal_height * 0.4)
+            a_box_y = q_box_y + q_box_height + int(32 * GameConfig.SCALE_FACTOR)
+            a_box = pygame.Rect(modal_x + int(36 * GameConfig.SCALE_FACTOR), a_box_y, modal_width - int(72 * GameConfig.SCALE_FACTOR), a_box_height)
+            a_gradient = self.create_gradient_surface(a_box.width, a_box.height, self.colors['hover_gradient_start'], self.colors['hover_gradient_end'])
+            a_box_surf = pygame.Surface((a_box.width, a_box.height), pygame.SRCALPHA)
+            a_box_surf.blit(a_gradient, (0, 0))
+            pygame.draw.rect(a_box_surf, self.colors['border'], a_box_surf.get_rect(), 2, border_radius=12)
+            self.screen.blit(a_box_surf, (a_box.x, a_box.y))
+            if self.ai_loading:
+                a_lines = ["AI is thinking..."]
+            elif self.ai_error:
+                a_lines = [self.ai_error]
+            elif self.ai_answer:
+                a_lines = self.wrap_text(self.ai_answer, self.font, a_box.width - 40)
+            else:
+                a_lines = [""]
+            for i, line in enumerate(a_lines):
+                line_surface = self.font.render(line, True, self.colors['text'])
+                line_rect = line_surface.get_rect(midtop=(a_box.centerx, a_box.y + 24 + i * self.font.get_height()))
+                self.screen.blit(line_surface, line_rect)
+            # Back button styled to match theme
+            self.back_button.rect.topleft = (modal_x + modal_width//2 - self.back_button.rect.width//2, modal_y + modal_height - int(70 * GameConfig.SCALE_FACTOR))
+            self.back_button.draw(self.screen)
+            return
 
     def set_game_paused(self, paused):
         self.game_paused = paused 
