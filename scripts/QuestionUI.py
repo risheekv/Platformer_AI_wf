@@ -18,7 +18,7 @@ import GameConfig
 
 class QuestionUI:
     def __init__(self, screen, sheet_name=None):
-        self.screen = screen
+        self.screen = screen  # This will now always be game_surface
         self.active = False
         self.current_question = None
         self.selected_option = None
@@ -163,11 +163,17 @@ class QuestionUI:
         self.question_timer = self.question_timer_max * 60  # 60 FPS
         self.question_timer_active = True
     
-    def handle_events(self, event):
+    def handle_events(self, event, offset=(0, 0)):
+        # Adjust event.pos for offset if it's a mouse event
+        adj_event = event
+        if hasattr(event, 'pos'):
+            adj_pos = (event.pos[0] - offset[0], event.pos[1] - offset[1])
+            # Create a new event with adjusted pos (pygame.event.Event is immutable, so create a new one)
+            adj_event = pygame.event.Event(event.type, {**event.__dict__, 'pos': adj_pos})
         # If Ask AI modal is open, only handle Back button
         if self.showing_ai_popup:
-            if event.type == pygame.MOUSEBUTTONDOWN:
-                if self.back_button.rect.collidepoint(event.pos):
+            if adj_event.type == pygame.MOUSEBUTTONDOWN:
+                if self.back_button.rect.collidepoint(adj_event.pos):
                     self.showing_ai_popup = False
                     self.ai_answer = None
                     self.ai_loading = False
@@ -178,18 +184,18 @@ class QuestionUI:
             return None
 
         # Handle mouse movement for hover effect
-        if event.type == pygame.MOUSEMOTION:
+        if adj_event.type == pygame.MOUSEMOTION:
             self.hover_index = -1
             if hasattr(self, 'option_rects') and self.option_rects:
                 for i, rect in enumerate(self.option_rects):
-                    if rect.collidepoint(event.pos):
+                    if rect.collidepoint(adj_event.pos):
                         self.hover_index = i
                         break
 
         # Handle mouse clicks
-        if event.type == pygame.MOUSEBUTTONDOWN:
+        if adj_event.type == pygame.MOUSEBUTTONDOWN:
             # Check if Ask AI button was clicked
-            if self.ask_ai_button.rect.collidepoint(event.pos) and not self.ai_loading:
+            if self.ask_ai_button.rect.collidepoint(adj_event.pos) and not self.ai_loading:
                 self.ai_loading = True
                 self.ai_answer = None
                 self.ai_error = None
@@ -215,7 +221,7 @@ class QuestionUI:
             # Handle option button clicks
             if hasattr(self, 'option_rects') and self.option_rects:
                 for i, rect in enumerate(self.option_rects):
-                    if rect.collidepoint(event.pos):
+                    if rect.collidepoint(adj_event.pos):
                         self.selected_option = i
                         self.question_answered = True
                         self.show_feedback = True
@@ -230,12 +236,12 @@ class QuestionUI:
                             return (False, self.ask_ai_clicked)
 
         # Handle keyboard navigation
-        if event.type == pygame.KEYDOWN:
-            if event.key == pygame.K_UP:
+        if adj_event.type == pygame.KEYDOWN:
+            if adj_event.key == pygame.K_UP:
                 self.hover_index = max(0, self.hover_index - 1)
-            elif event.key == pygame.K_DOWN:
+            elif adj_event.key == pygame.K_DOWN:
                 self.hover_index = min(3, self.hover_index + 1)
-            elif event.key == pygame.K_RETURN and self.hover_index != -1:
+            elif adj_event.key == pygame.K_RETURN and self.hover_index != -1:
                 self.selected_option = self.hover_index
                 self.question_answered = True
                 self.show_feedback = True
@@ -608,8 +614,8 @@ class QuestionUI:
                 line_rect = line_surface.get_rect(midtop=(q_box.centerx, q_box.y + 24 + i * self.title_font.get_height()))
                 self.screen.blit(line_surface, line_rect)
             # AI response box (much taller)
-            a_box_height = int(modal_height * 0.54)
-            a_box_y = q_box_y + q_box_height + int(44 * GameConfig.SCALE_FACTOR)
+            a_box_height = int(modal_height * 0.47)
+            a_box_y = q_box_y + q_box_height + int(40 * GameConfig.SCALE_FACTOR)
             a_box = pygame.Rect(modal_x + int(44 * GameConfig.SCALE_FACTOR), a_box_y, modal_width - int(88 * GameConfig.SCALE_FACTOR), a_box_height)
             a_gradient = self.create_gradient_surface(a_box.width, a_box.height, self.colors['hover_gradient_start'], self.colors['hover_gradient_end'])
             a_box_surf = pygame.Surface((a_box.width, a_box.height), pygame.SRCALPHA)

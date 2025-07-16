@@ -1,5 +1,5 @@
 import Config
-import scripts.GameConfig as GameConfig
+import GameConfig as GameConfig
 import Levels
 from Button import Button
 from QuestionUI import QuestionUI
@@ -16,6 +16,19 @@ import os
 import traceback  # Add traceback for better error reporting
 import tensorflow as tf
 import sys
+
+# Get the user's display size
+info = pygame.display.Info()
+display_width, display_height = info.current_w, info.current_h
+
+# Create the main window at the display size
+screen = pygame.display.set_mode((display_width, display_height))
+pygame.display.set_caption('Mazer')
+
+# Create a fixed-size game surface for all game rendering
+GAME_SURFACE_WIDTH = GameConfig.SCREEN_WIDTH
+GAME_SURFACE_HEIGHT = GameConfig.SCREEN_HEIGHT
+game_surface = pygame.Surface((GAME_SURFACE_WIDTH, GAME_SURFACE_HEIGHT))
 
 # ------------ Globals ------------
 
@@ -44,8 +57,6 @@ tile_size = GameConfig.TILE_SIZE				# tile size
 world_tiles = []				# first layer
 
 pygame.init()
-screen = pygame.display.set_mode((screen_width, screen_height))
-pygame.display.set_caption('Mazer')
 
 in_menu = True
 game_finished = False
@@ -118,8 +129,8 @@ class Platform(pygame.sprite.Sprite):
 			self.move_counter *= -1
 
 	# Draw the platform
-	def draw(self, screen):
-		screen.blit(self.image, self.rect)
+	def draw(self, surface):
+		surface.blit(self.image, self.rect)
 
 # -----------------------------------------------------------------------------------------------------------
 
@@ -298,13 +309,13 @@ class World():
 
 	# Draw the background
 	def draw_world(self):
-		screen.blit(self.background, (0, 0))
+		game_surface.blit(self.background, (0, 0))
 
 	# Draw the world data from the tiles we created
 	def draw_tiles(self):
 		if world_tiles:
 			for tile in world_tiles:
-				screen.blit(tile[0], tile[1])
+				game_surface.blit(tile[0], tile[1])
 
 # -----------------------------------------------------------------------------------------------------------
 
@@ -557,11 +568,11 @@ class Character():
 		return values
 
 	# create a 2px rect outline around the player
-	def draw_outline(self):
-		pygame.draw.rect(screen, (179, 29, 18), self.rect, 2)
+	def draw_outline(self, surface):
+		pygame.draw.rect(surface, (179, 29, 18), self.rect, 2)
 
 	# handle the player
-	def draw_player(self, game_paused=False):
+	def draw_player(self, surface, game_paused=False):
 		global game_over
 		dx = 0
 		dy = 0
@@ -602,7 +613,7 @@ class Character():
 				else:
 					self.rect.y += dy
 
-		screen.blit(self.image, self.rect)
+		surface.blit(self.image, self.rect)
 
 # -----------------------------------------------------------------------------------------------------------
 
@@ -663,8 +674,8 @@ class Chaser(pygame.sprite.Sprite):
 				self.rect.x += dx * self.speed
 				self.rect.y += dy * self.speed
 
-	def draw(self, screen):
-		screen.blit(self.image, self.rect)
+	def draw(self, surface):
+		surface.blit(self.image, self.rect)
 
 # -----------------------------------------------------------------------------------------------------------
 
@@ -787,14 +798,10 @@ class Game():
 
 		run = True
 		while(run):
-			# Maintain consistent FPS
-			self.clock.tick(self.fps)
-
-			# Update question timer if active
-			if self.question_ui:
-				self.question_ui.update()
-
-			# draw assets onto the screen
+			# Fill the full window with black
+			screen.fill((0, 0, 0))
+			# Clear the game surface (optional, for transparency)
+			game_surface.fill((0, 0, 0))
 			world.draw_world()
 
 			# setup main menu
@@ -803,7 +810,7 @@ class Game():
 				title_font = pygame.font.SysFont('comicsansms', int(48 * GameConfig.SCALE_FACTOR))
 				title_text = title_font.render("🎮 MAZE RUNNER 🎮", True, (255, 215, 0))
 				title_rect = title_text.get_rect(center=(screen_width // 2, int(80 * GameConfig.SCALE_FACTOR)))
-				screen.blit(title_text, title_rect)
+				game_surface.blit(title_text, title_rect)
 				
 				# --- Draw Rules in Compact Format ---
 				rules = [
@@ -838,7 +845,7 @@ class Game():
 				
 				# Add border and shadow effect
 				pygame.draw.rect(rules_bg, (255, 255, 255, 50), rules_bg.get_rect(), 2)
-				screen.blit(rules_bg, (box_x, box_y))
+				game_surface.blit(rules_bg, (box_x, box_y))
 				
 				# Draw rules with better formatting
 				left_margin = box_x + int(30 * GameConfig.SCALE_FACTOR)
@@ -849,7 +856,7 @@ class Game():
 					text_surface = rules_font.render(text, True, color)
 					x_pos = left_margin + (indent * int(20 * GameConfig.SCALE_FACTOR))
 					y_pos = start_y + i * line_height
-					screen.blit(text_surface, (x_pos, y_pos))
+					game_surface.blit(text_surface, (x_pos, y_pos))
 				
 				# --- Draw Buttons in Bottom Section ---
 				# Position buttons in the bottom third of the screen
@@ -857,9 +864,11 @@ class Game():
 				self.play_button.rect.centery = button_y
 				self.quit_button.rect.centery = button_y + int(90 * GameConfig.SCALE_FACTOR)
 
-				if self.quit_button.draw(screen):
+				surf_x = (display_width - GAME_SURFACE_WIDTH) // 2
+				surf_y = (display_height - GAME_SURFACE_HEIGHT) // 2
+				if self.quit_button.draw(game_surface, offset=(surf_x, surf_y)):
 					run = False
-				if self.play_button.draw(screen):
+				if self.play_button.draw(game_surface, offset=(surf_x, surf_y)):
 					in_menu = False
 					in_domain_select = True
 					points = 0  # Reset points when starting new game
@@ -869,39 +878,39 @@ class Game():
 				title_font = pygame.font.SysFont('comicsansms', int(40 * GameConfig.SCALE_FACTOR))
 				title_text = title_font.render("Choose a Domain", True, (255, 215, 0))
 				title_rect = title_text.get_rect(center=(screen_width // 2, int(120 * GameConfig.SCALE_FACTOR)))
-				screen.blit(title_text, title_rect)
+				game_surface.blit(title_text, title_rect)
 				for domain, btn in self.domain_buttons:
-					if btn.draw(screen):
+					if btn.draw(game_surface, offset=(surf_x, surf_y)):
 						selected_domain = domain
 						in_domain_select = False
 						# Pass the selected domain's XLSX to QuestionUI
-						self.question_ui = QuestionUI(screen, Config.DOMAINS[selected_domain])
+						self.question_ui = QuestionUI(game_surface, Config.DOMAINS[selected_domain])
 						self.game_timer()  # Start timer only after domain is selected
 						self.timer_started = True
 			else:
 				world.draw_tiles()
-				check_points[0].draw(screen)
-				lava_tiles[0].draw(screen)
-				player.draw_player(self.question_ui.is_game_paused())
-				plats[0].draw(screen)
+				check_points[0].draw(game_surface)
+				lava_tiles[0].draw(game_surface)
+				player.draw_player(game_surface, self.question_ui.is_game_paused())
+				plats[0].draw(game_surface)
 				chaser.update(player, self.question_ui.is_game_paused())
 				if not self.question_ui.is_game_paused():
 					plats[0].update()
-					chaser.draw(screen)
+					chaser.draw(game_surface)
 					if self.timer_started:
 						timer_surface = self.timer_font.render(self.timer_text, True, (47, 48, 29))
 						timer_rect = timer_surface.get_rect()
 						timer_rect.topleft = (60, 42)
-						screen.blit(timer_surface, timer_rect)
+						game_surface.blit(timer_surface, timer_rect)
 
-						screen.blit(self.score_font.render(f"Score: {points}", True, (47, 48, 29)), (screen_width - 150, 42))
+						game_surface.blit(self.score_font.render(f"Score: {points}", True, (47, 48, 29)), (screen_width - 150, 42))
 					
 					# Check for collision between player and chaser
 					if chaser.rect.colliderect(player.rect):
 						game_over = -1  # Player caught by chaser
 				else:
 					# When paused, just draw the chaser without updating
-					chaser.draw(screen)
+					chaser.draw(game_surface)
 
 				# Draw level indicator as a button beside timer if a question is active (always visible)
 				if self.question_ui.is_active() and self.question_ui.current_level and self.timer_started:
@@ -933,10 +942,10 @@ class Game():
 						b = int(185 * (1 - ratio) + 173 * ratio)
 						pygame.draw.line(button_bg, (r, g, b), (0, y), (button_width, y))
 					pygame.draw.rect(button_bg, (255, 255, 255, 80), button_bg.get_rect(), 2, border_radius=12)
-					screen.blit(button_bg, (button_x, button_y))
+					game_surface.blit(button_bg, (button_x, button_y))
 					# Draw level text centered
 					level_text_rect = level_text.get_rect(center=button_rect.center)
-					screen.blit(level_text, level_text_rect)
+					game_surface.blit(level_text, level_text_rect)
 
 				# Check for collision with moving platforms in level 1
 				if current_level == 0:  # Level 1
@@ -965,6 +974,7 @@ class Game():
 
 				# Draw question UI if active
 				if self.question_ui.is_active():
+					self.question_ui.update()
 					self.question_ui.draw()
 
 				# player active
@@ -1009,8 +1019,8 @@ class Game():
 						score_rect = score_text.get_rect(center=(screen_width//2, screen_height//2 - 30))
 					
 					# Draw the messages
-					screen.blit(title, title_rect)
-					screen.blit(score_text, score_rect)
+					game_surface.blit(title, title_rect)
+					game_surface.blit(score_text, score_rect)
 
 					# --- Show Rank (Game Over) ---
 					rank = None
@@ -1024,9 +1034,9 @@ class Game():
 						rank_font = pygame.font.SysFont('comicsansms', 40)
 						rank_text = rank_font.render(f'Rank: {rank}', True, (255, 215, 0))
 						rank_rect = rank_text.get_rect(center=(screen_width//2, score_rect.bottom + 50))
-						screen.blit(rank_text, rank_rect)
+						game_surface.blit(rank_text, rank_rect)
 
-					if self.resume_button.draw(screen):
+					if self.resume_button.draw(game_surface, offset=(surf_x, surf_y)):
 						values = self.load_level()
 						player = values[0]
 						world = values[1]
@@ -1035,7 +1045,7 @@ class Game():
 						self.timer_started = True  # Mark timer as started
 						self.insufficient_points = False  # Reset insufficient points flag
 						points = 0  # Reset points when restarting after game over
-					if self.quit_button.draw(screen):
+					if self.quit_button.draw(game_surface, offset=(surf_x, surf_y)):
 						run = False
 
 				# player won
@@ -1062,13 +1072,13 @@ class Game():
 					bg_surf = pygame.Surface((box_width, box_height), pygame.SRCALPHA)
 					bg_surf.fill((30, 30, 30, 220))
 					pygame.draw.rect(bg_surf, (0, 0, 0, 255), bg_surf.get_rect(), border_radius=18)
-					screen.blit(bg_surf, (box_x, box_y))
+					game_surface.blit(bg_surf, (box_x, box_y))
 
 					# Draw the messages with extra spacing
 					title_rect = title.get_rect(center=(screen_width//2, box_y + padding_y + title.get_height()//2))
 					subtitle_rect = subtitle.get_rect(center=(screen_width//2, title_rect.bottom + padding_y + subtitle.get_height()//2))
-					screen.blit(title, title_rect)
-					screen.blit(subtitle, subtitle_rect)
+					game_surface.blit(title, title_rect)
+					game_surface.blit(subtitle, subtitle_rect)
 
 					# --- Show Rank (Game Finished) ---
 					rank = None
@@ -1082,18 +1092,18 @@ class Game():
 						rank_font = pygame.font.SysFont('comicsansms', 44)
 						rank_text = rank_font.render(f'Rank: {rank}', True, (255, 215, 0))
 						rank_rect = rank_text.get_rect(center=(screen_width//2, subtitle_rect.bottom + 60))
-						screen.blit(rank_text, rank_rect)
+						game_surface.blit(rank_text, rank_rect)
 
-					if self.quit_button.draw(screen):
+					if self.quit_button.draw(game_surface, offset=(surf_x, surf_y)):
 						run = False
 
 			for event in pygame.event.get():
 				if event.type == pygame.QUIT:
 					run = False
 
-				# Handle question UI events
+				# Handle question UI events with offset
 				if self.question_ui:
-					result = self.question_ui.handle_events(event)
+					result = self.question_ui.handle_events(event, offset=(surf_x, surf_y))
 					if result is not None:
 						is_correct, used_ask_ai = result
 						# Question was answered, check if correct
@@ -1130,6 +1140,10 @@ class Game():
 				if self.question_ui and self.question_ui.active and self.question_ui.question_answered and self.question_ui.show_feedback and self.question_ui.feedback_message.startswith("⏰ Time's up!"):
 					game_over = -1
 
+			# At the end of the frame, blit the game_surface centered on the screen
+			surf_x = (display_width - GAME_SURFACE_WIDTH) // 2
+			surf_y = (display_height - GAME_SURFACE_HEIGHT) // 2
+			screen.blit(game_surface, (surf_x, surf_y))
 			pygame.display.update()
 
 # Start the game
