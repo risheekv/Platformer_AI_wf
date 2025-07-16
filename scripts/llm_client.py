@@ -7,6 +7,8 @@ Requires environment variables for all credentials. See README for details.
 import os
 import requests
 from typing import Optional
+import uuid
+from datetime import datetime, timezone
 
 class LLMClient:
     """
@@ -37,6 +39,7 @@ class LLMClient:
                     'client_id': self.apigee_consumer_key,
                     'client_secret': self.apigee_consumer_secret
                 },
+                headers={'Content-Type': 'application/x-www-form-urlencoded'},
                 timeout=10
             )
             resp.raise_for_status()
@@ -54,12 +57,16 @@ class LLMClient:
         if not self._access_token:
             if not self.authenticate():
                 return None
+        now = datetime.now(timezone.utc).isoformat()
         headers = {
             'Authorization': f'Bearer {self._access_token}',
             'Content-Type': 'application/json',
-            'x-api-key': self.genai_api_key,
-            'x-client-id': self.genai_client_id,
-            'usecase-id': self.usecase_id
+            'x-wf-client-id': os.getenv('WF_CLIENT_ID', 'PRPLT'),
+            'x-wf-usecase-id': os.getenv('WF_USECASE_ID', 'GENAI184_PRPLT'),
+            'x-request-id': str(uuid.uuid4()),
+            'x-wf-request-date': now,
+            'x-wf-api-key': os.getenv('WF_API_KEY', self.genai_api_key),
+            'x-correlation-id': str(uuid.uuid4()),
         }
         payload = {
             "model": self.model,
@@ -92,6 +99,26 @@ if __name__ == "__main__":
     import dotenv
     dotenv.load_dotenv()
     client = LLMClient()
+    print('APIGEE_OAUTH_URL:', client.oauth_url)
+    print('APIGEE_CONSUMER_KEY:', client.apigee_consumer_key)
+    print('APIGEE_CONSUMER_SECRET:', client.apigee_consumer_secret)
+    data = {
+        'grant_type': 'client_credentials',
+        'client_id': client.apigee_consumer_key,
+        'client_secret': client.apigee_consumer_secret
+    }
+    headers = {'Content-Type': 'application/x-www-form-urlencoded'}
+    print('Auth Request Data:', data)
+    print('Auth Request Headers:', headers)
+    try:
+        token = client.authenticate()
+        print('Access Token:', token)
+        if token:
+            print('Authentication succeeded.')
+        else:
+            print('Authentication failed.')
+    except Exception as e:
+        print('Exception during authentication:', e)
     test_question = "What is the capital of France?"
     print(f"Testing LLM API with question: {test_question}")
     answer = client.ask(test_question)
