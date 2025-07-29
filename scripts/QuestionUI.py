@@ -563,18 +563,31 @@ class QuestionUI:
         # Draw options with color feedback
         button_width = int(600 * GameConfig.SCALE_FACTOR * scale)
         button_height = int(50 * GameConfig.SCALE_FACTOR * scale)
-        spacing = int(20 * GameConfig.SCALE_FACTOR * scale)
+        spacing = int(40 * GameConfig.SCALE_FACTOR * scale)
         
         self.option_rects = []  # Reset option rects each frame
-        for i, option in enumerate(self.current_question["options"]):
-            # Wrap option text
+        # First pass: calculate all button heights to determine proper positioning
+        button_heights = []
+        for option in self.current_question["options"]:
             option_lines = self.wrap_text(option, self.font, button_width - int(40 * GameConfig.SCALE_FACTOR * scale))
             option_height = len(option_lines) * int(self.font.get_height() * scale) + int(20 * GameConfig.SCALE_FACTOR * scale)
             button_height = max(int(50 * GameConfig.SCALE_FACTOR * scale), option_height)
+            button_heights.append(button_height)
+        
+        # Calculate starting position to center all options
+        total_height = sum(button_heights) + (len(button_heights) - 1) * spacing
+        start_y = self.screen.get_height() // 2 - total_height // 2
+        
+        for i, option in enumerate(self.current_question["options"]):
+            # Wrap option text
+            option_lines = self.wrap_text(option, self.font, button_width - int(40 * GameConfig.SCALE_FACTOR * scale))
+            button_height = button_heights[i]
             
-            # Calculate button position
+            # Calculate button position using cumulative height
             button_x = (self.screen.get_width() - button_width) // 2
-            button_y = self.screen.get_height() // 2 - int(50 * GameConfig.SCALE_FACTOR * scale) + i * (button_height + spacing)
+            button_y = start_y
+            for j in range(i):
+                button_y += button_heights[j] + spacing
             
             # Determine button colors based on selection state
             if self.question_answered and self.show_feedback:
