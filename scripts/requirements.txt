@@ -1,0 +1,4 @@
+requests
+pandas
+pygame 
+python-dotenv 
