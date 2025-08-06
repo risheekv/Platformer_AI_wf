@@ -710,18 +710,24 @@ class Game():
 		self.continue_button = Button(screen_width // 2 - int(100 * GameConfig.SCALE_FACTOR), screen_height // 2, continue_img)
 		self.resume_button = Button(screen_width // 2 - int(100 * GameConfig.SCALE_FACTOR), screen_height // 2, resume_img)
 
-		# Create domain buttons
+		# Create domain buttons using configurable domains
 		domain_font = pygame.font.SysFont('comicsansms', int(32 * GameConfig.SCALE_FACTOR))
 		button_width = int(350 * GameConfig.SCALE_FACTOR)
 		button_height = int(70 * GameConfig.SCALE_FACTOR)
 		spacing = int(30 * GameConfig.SCALE_FACTOR)
-		start_y = screen_height // 2 - ((len(Config.DOMAINS) * (button_height + spacing)) // 2)
+		
+		# Get enabled domains from GameConfig
+		enabled_domains = GameConfig.get_enabled_domains()
+		start_y = screen_height // 2 - ((len(enabled_domains) * (button_height + spacing)) // 2)
 		self.domain_buttons = []
-		for i, domain in enumerate(Config.DOMAINS.keys()):
+		
+		for i, (domain_name, sheet_name) in enumerate(enabled_domains.items()):
 			x = screen_width // 2 - button_width // 2
 			y = start_y + i * (button_height + spacing)
-			btn = create_text_button(domain, x, y, button_width, button_height, domain_font, [(41,128,185), (142,68,173)])
-			self.domain_buttons.append((domain, btn))
+			# Get domain-specific colors
+			colors = GameConfig.get_domain_colors(domain_name)
+			btn = create_text_button(domain_name, x, y, button_width, button_height, domain_font, colors)
+			self.domain_buttons.append((domain_name, btn))
 
 	def reset_groups(self):
 		global plats
@@ -921,8 +927,10 @@ class Game():
 					if btn.draw(game_surface, offset=(surf_x, surf_y)):
 						selected_domain = domain
 						in_domain_select = False
-						# Pass the selected domain's XLSX to QuestionUI
-						self.question_ui = QuestionUI(game_surface, Config.DOMAINS[selected_domain])
+						# Pass the selected domain's sheet name to QuestionUI
+						enabled_domains = GameConfig.get_enabled_domains()
+						sheet_name = enabled_domains[selected_domain]
+						self.question_ui = QuestionUI(game_surface, sheet_name)
 						self.game_timer()  # Start timer only after domain is selected
 						self.timer_started = True
 			else:
