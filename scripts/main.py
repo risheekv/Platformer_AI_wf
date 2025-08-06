@@ -710,24 +710,55 @@ class Game():
 		self.continue_button = Button(screen_width // 2 - int(100 * GameConfig.SCALE_FACTOR), screen_height // 2, continue_img)
 		self.resume_button = Button(screen_width // 2 - int(100 * GameConfig.SCALE_FACTOR), screen_height // 2, resume_img)
 
-		# Create domain buttons using configurable domains
-		domain_font = pygame.font.SysFont('comicsansms', int(32 * GameConfig.SCALE_FACTOR))
-		button_width = int(350 * GameConfig.SCALE_FACTOR)
-		button_height = int(70 * GameConfig.SCALE_FACTOR)
-		spacing = int(30 * GameConfig.SCALE_FACTOR)
+		# Create domain buttons using configurable domains with improved layout
+		domain_font = pygame.font.SysFont('comicsansms', int(24 * GameConfig.SCALE_FACTOR))  # Smaller font
+		button_width = int(300 * GameConfig.SCALE_FACTOR)  # Smaller button width
+		button_height = int(60 * GameConfig.SCALE_FACTOR)  # Smaller button height
+		spacing = int(25 * GameConfig.SCALE_FACTOR)  # Smaller spacing
 		
 		# Get enabled domains from GameConfig
 		enabled_domains = GameConfig.get_enabled_domains()
-		start_y = screen_height // 2 - ((len(enabled_domains) * (button_height + spacing)) // 2)
+		enabled_domains_list = list(enabled_domains.items())
+		num_domains = len(enabled_domains_list)
+		
 		self.domain_buttons = []
 		
-		for i, (domain_name, sheet_name) in enumerate(enabled_domains.items()):
-			x = screen_width // 2 - button_width // 2
-			y = start_y + i * (button_height + spacing)
-			# Get domain-specific colors
-			colors = GameConfig.get_domain_colors(domain_name)
-			btn = create_text_button(domain_name, x, y, button_width, button_height, domain_font, colors)
-			self.domain_buttons.append((domain_name, btn))
+		if num_domains <= 4:
+			# Single column layout in the middle
+			start_y = screen_height // 2 - ((num_domains * (button_height + spacing)) // 2)
+			for i, (domain_name, sheet_name) in enumerate(enabled_domains_list):
+				x = screen_width // 2 - button_width // 2
+				y = start_y + i * (button_height + spacing)
+				# Get domain-specific colors
+				colors = GameConfig.get_domain_colors(domain_name)
+				btn = create_text_button(domain_name, x, y, button_width, button_height, domain_font, colors)
+				self.domain_buttons.append((domain_name, btn))
+		else:
+			# Two-column layout: 4 on left, remaining on right
+			left_domains = enabled_domains_list[:4]
+			right_domains = enabled_domains_list[4:8]  # Max 4 on right side
+			
+			# Calculate positions for left column
+			left_start_y = screen_height // 2 - ((len(left_domains) * (button_height + spacing)) // 2)
+			left_x = screen_width // 2 - button_width - int(50 * GameConfig.SCALE_FACTOR)  # Left side
+			
+			# Calculate positions for right column
+			right_start_y = screen_height // 2 - ((len(right_domains) * (button_height + spacing)) // 2)
+			right_x = screen_width // 2 + int(50 * GameConfig.SCALE_FACTOR)  # Right side
+			
+			# Create left column buttons
+			for i, (domain_name, sheet_name) in enumerate(left_domains):
+				y = left_start_y + i * (button_height + spacing)
+				colors = GameConfig.get_domain_colors(domain_name)
+				btn = create_text_button(domain_name, left_x, y, button_width, button_height, domain_font, colors)
+				self.domain_buttons.append((domain_name, btn))
+			
+			# Create right column buttons
+			for i, (domain_name, sheet_name) in enumerate(right_domains):
+				y = right_start_y + i * (button_height + spacing)
+				colors = GameConfig.get_domain_colors(domain_name)
+				btn = create_text_button(domain_name, right_x, y, button_width, button_height, domain_font, colors)
+				self.domain_buttons.append((domain_name, btn))
 
 	def reset_groups(self):
 		global plats
