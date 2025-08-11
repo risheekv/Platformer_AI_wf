@@ -1,7 +1,14 @@
 # GameConfig.py
 
 # General scaling
-SCALE_FACTOR = 0.85
+SCALE_FACTOR = 1.10
+
+# Jump physics scaling - mathematical function derived from empirical data
+# Data points: (0.85, 1.0) and (1.10, 0.08)
+# Function: root_value = -3.68 * SCALE_FACTOR + 4.128
+ORIGINAL_SCALE = 0.85  # The scale where jump was perfectly tuned
+ROOT_VALUE = -3.68 * SCALE_FACTOR + 4.128  # Linear function through data points
+JUMP_SCALE_FACTOR = (SCALE_FACTOR / ORIGINAL_SCALE) ** ROOT_VALUE  # Dynamic scaling
 
 # Screen and tile sizes
 SCREEN_WIDTH = int(1000 * SCALE_FACTOR)

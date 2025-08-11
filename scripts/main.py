@@ -470,7 +470,7 @@ class Character():
 
 		# currently jumping
 		if key[pygame.K_SPACE] and self.jumped == False and self.in_air == False:
-			self.vel_y = -15 * GameConfig.SCALE_FACTOR  # Scaled jump height
+			self.vel_y = -15 * GameConfig.JUMP_SCALE_FACTOR  # Scaled jump height using physics-appropriate scaling
 			self.jumped = True
 			self.counter += 1
 			self.animation = "jump"
@@ -604,11 +604,15 @@ class Character():
 				dx = col[0]
 				dy = col[1]
 
-				# handle out of bounds
-				if self.rect.x + dx >= -25 and self.rect.x + dx <= 977:
+				# handle out of bounds - dynamic boundaries that scale with SCALE_FACTOR
+				left_boundary = int(-25 * GameConfig.SCALE_FACTOR)
+				right_boundary = int(977 * GameConfig.SCALE_FACTOR)
+				bottom_boundary = int(1000 * GameConfig.SCALE_FACTOR)
+				
+				if self.rect.x + dx >= left_boundary and self.rect.x + dx <= right_boundary:
 					self.rect.x += dx
 
-				if self.rect.y + dy >= 1000:
+				if self.rect.y + dy >= bottom_boundary:
 					game_over = -1
 				else:
 					self.rect.y += dy
@@ -1029,26 +1033,28 @@ class Game():
 				if current_level == 0:  # Level 1
 					platform_list = list(plats[0])
 					for idx, platform in enumerate(platform_list):
-						# Check if player is on top of the platform with a small tolerance
-						# For platform index 2, make the right edge more sensitive
-						if idx == 2:
-							right_margin = 18  # Increase margin for right edge sensitivity
-						else:
-							right_margin = 5
+						# Calculate 20% detection range on both sides of the platform
+						platform_width = platform.rect.width
+						detection_margin = int(platform_width * 0.2)  # 20% of platform width
+						
+						# Extended detection area: 20% left and 20% right of platform boundaries
+						left_detection_bound = platform.rect.left - detection_margin
+						right_detection_bound = platform.rect.right + detection_margin
+						
 						if (
 							not platform.question_shown and 
-							abs(player.rect.bottom - platform.rect.top) <= 2 and  # Small tolerance for exact position
-							player.rect.right > platform.rect.left + 5 and   # Small margin from edges
-							player.rect.left < platform.rect.right - right_margin and
+							abs(player.rect.bottom - platform.rect.top) <= 5 and  # Vertical tolerance
+							player.rect.right > left_detection_bound and   # Player extends into left detection zone
+							player.rect.left < right_detection_bound and   # Player extends into right detection zone
 							not player.in_air
 						):
 							platform.question_shown = True
 							# Select question complexity based on platform index
-							if idx in [2, 4]:
+							if idx in [2, 4, 1]:
 								complexity = 'Level 1'
-							elif idx in [0, 1]:
+							elif idx in [0, 3]:
 								complexity = 'Level 2'
-							elif idx in [3, 5]:
+							elif idx in [5]:
 								complexity = 'Level 3'
 							else:
 								complexity = ''  # fallback: any
@@ -1245,11 +1251,11 @@ def draw_platforms_with_labels(surface, font, draw_labels_only=False):
     }
     # Platform index to level mapping
     def get_level_label(idx):
-        if idx in [2, 4]:
+        if idx in [2, 4, 1]:
             return 'Level 1'
-        elif idx in [0, 1]:
+        elif idx in [0, 3]:
             return 'Level 2'
-        elif idx in [3, 5]:
+        elif idx in [5]:
             return 'Level 3'
         else:
             return ''
