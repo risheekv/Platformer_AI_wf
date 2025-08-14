@@ -16,6 +16,8 @@ import os
 import traceback  # Add traceback for better error reporting
 import tensorflow as tf
 import sys
+import pandas as pd
+from datetime import datetime
 
 # Get the user's display size
 info = pygame.display.Info()
@@ -50,6 +52,32 @@ def create_text_button(text, x, y, width, height, font, colors):
     button_img.blit(text_surf, text_rect)
     return Button(x, y, button_img)
 
+def draw_gradient_box(surface, rect, color1, color2, alpha=200):
+    """
+    Draw a gradient box with rounded corners and transparency
+    """
+    # Create a surface for the gradient with per-pixel alpha
+    gradient_surface = pygame.Surface((rect.width, rect.height), pygame.SRCALPHA)
+    
+    # Draw vertical gradient
+    for y in range(rect.height):
+        # Calculate interpolation factor (0.0 to 1.0)
+        factor = y / rect.height
+        
+        # Interpolate between colors
+        r = int(color1[0] * (1 - factor) + color2[0] * factor)
+        g = int(color1[1] * (1 - factor) + color2[1] * factor)
+        b = int(color1[2] * (1 - factor) + color2[2] * factor)
+        
+        # Draw horizontal line with interpolated color and alpha
+        pygame.draw.line(gradient_surface, (r, g, b, alpha), (0, y), (rect.width, y))
+    
+    # Add a subtle border
+    pygame.draw.rect(gradient_surface, (255, 255, 255, 100), (0, 0, rect.width, rect.height), 3)
+    
+    # Blit the gradient surface to the main surface
+    surface.blit(gradient_surface, rect.topleft)
+
 # dimensions: 18 x 20
 screen_width = GameConfig.SCREEN_WIDTH 			# screen width
 screen_height = GameConfig.SCREEN_HEIGHT 			# screen height
@@ -59,6 +87,8 @@ world_tiles = []				# first layer
 pygame.init()
 
 in_menu = True
+in_domain_select = False        # Domain selection screen flag
+selected_domain = None          # Selected domain for questions
 game_finished = False
 game_over = 0 					# Game-Over flag
 current_level = 0				# level counter
@@ -470,7 +500,7 @@ class Character():
 
 		# currently jumping
 		if key[pygame.K_SPACE] and self.jumped == False and self.in_air == False:
-			self.vel_y = -15 * GameConfig.JUMP_SCALE_FACTOR  # Scaled jump height using physics-appropriate scaling
+			self.vel_y = -15 * GameConfig.SCALE_FACTOR  # Scaled jump height using physics-appropriate scaling
 			self.jumped = True
 			self.counter += 1
 			self.animation = "jump"
@@ -692,6 +722,15 @@ class Game():
 		self.domain_buttons = []
 		self.selected_domain = None
 		self.question_ui = None
+		self.username = ""  # Store username
+		self.username_active = False  # Track if username field is active
+		self.cursor_blink_timer = 0  # Timer for cursor blinking
+		self.player_details_saved = False  # Flag to prevent multiple saves
+		self.show_duplicate_message = False  # Flag to show duplicate username message
+		self.duplicate_message_timer = 0  # Timer for duplicate message display
+		self.show_instructions = False  # Flag to show instructions screen
+		self.username_error_type = ""  # Type of username error: "missing" or "duplicate"
+		self.level1_wrong_answers = 0  # Counter for Level 1 wrong answers
 		self.game_menu()
 		self.score_font = pygame.font.SysFont('comicsansms', int(25 * GameConfig.SCALE_FACTOR))  # Scaled font size
 		self.timer_started = False  # New flag to track if timer has started
@@ -700,19 +739,32 @@ class Game():
 
 	def game_menu(self):
 		play_img = pygame.image.load(Config.UI["play"])
-		quit_img = pygame.image.load(Config.UI["quit"])
 		continue_img = pygame.image.load(Config.UI["continue"])
-		resume_img = pygame.image.load(Config.UI["resume"])
 
 		play_img = pygame.transform.scale(play_img, (int(200 * GameConfig.SCALE_FACTOR), int(70 * GameConfig.SCALE_FACTOR)))
-		quit_img = pygame.transform.scale(quit_img, (int(200 * GameConfig.SCALE_FACTOR), int(70 * GameConfig.SCALE_FACTOR)))
 		continue_img = pygame.transform.scale(continue_img, (int(200 * GameConfig.SCALE_FACTOR), int(70 * GameConfig.SCALE_FACTOR)))
-		resume_img = pygame.transform.scale(resume_img, (int(200 * GameConfig.SCALE_FACTOR), int(70 * GameConfig.SCALE_FACTOR)))
 
 		self.play_button = Button(screen_width // 2 - int(100 * GameConfig.SCALE_FACTOR), screen_height // 2, play_img)
-		self.quit_button = Button(screen_width // 2 - int(100 * GameConfig.SCALE_FACTOR), screen_height // 2 + int(110 * GameConfig.SCALE_FACTOR), quit_img)
 		self.continue_button = Button(screen_width // 2 - int(100 * GameConfig.SCALE_FACTOR), screen_height // 2, continue_img)
-		self.resume_button = Button(screen_width // 2 - int(100 * GameConfig.SCALE_FACTOR), screen_height // 2, resume_img)
+		
+		# Create instructions button as text button
+		instructions_font = pygame.font.SysFont('comicsansms', int(28 * GameConfig.SCALE_FACTOR))
+		instructions_colors = ((52, 152, 219), (155, 89, 182))  # Light blue to purple gradient
+		instructions_button_width = int(200 * GameConfig.SCALE_FACTOR)
+		instructions_button_height = int(60 * GameConfig.SCALE_FACTOR)
+		instructions_x = screen_width // 2 - instructions_button_width // 2
+		instructions_y = screen_height // 2
+		self.instructions_button = create_text_button("📚 Instructions", instructions_x, instructions_y, instructions_button_width, instructions_button_height, instructions_font, instructions_colors)
+		
+
+		# Create restart button as text button instead of using resume image
+		restart_font = pygame.font.SysFont('comicsansms', int(32 * GameConfig.SCALE_FACTOR))
+		restart_colors = ((41, 128, 185), (142, 68, 173))  # Blue to purple gradient
+		restart_button_width = int(200 * GameConfig.SCALE_FACTOR)
+		restart_button_height = int(70 * GameConfig.SCALE_FACTOR)
+		restart_x = screen_width // 2 - restart_button_width // 2
+		restart_y = screen_height // 2
+		self.resume_button = create_text_button("Restart", restart_x, restart_y, restart_button_width, restart_button_height, restart_font, restart_colors)
 
 		# Create domain buttons using configurable domains with improved layout
 		domain_font = pygame.font.SysFont('comicsansms', int(24 * GameConfig.SCALE_FACTOR))  # Smaller font
@@ -776,6 +828,146 @@ class Game():
 		self.plat_group.empty()
 		self.check_group.empty()
 		self.lava_group.empty()
+	
+	def reset_platform_states(self):
+		"""Reset all platform states (like question_shown flags)"""
+		for platform in self.plat_group:
+			platform.question_shown = False
+
+	def wrap_text(self, text, font, max_width):
+		"""Wrap text to fit within max_width"""
+		words = text.split(' ')
+		lines = []
+		current_line = []
+		
+		for word in words:
+			# Test if adding this word exceeds the width
+			test_line = ' '.join(current_line + [word])
+			test_width = font.size(test_line)[0]
+			
+			if test_width <= max_width:
+				current_line.append(word)
+			else:
+				if current_line:
+					lines.append(' '.join(current_line))
+				current_line = [word]
+		
+		if current_line:
+			lines.append(' '.join(current_line))
+			
+		return lines
+
+	def save_player_details(self, username, points, rank=None, game_status="Completed"):
+		"""Save player details to PlayerDetails sheet in questions.xlsx"""
+		try:
+			excel_file = 'scripts/questions.xlsx'
+			
+			# Check if file exists
+			if not os.path.exists(excel_file):
+				print(f"Excel file {excel_file} not found. Cannot save player details.")
+				return False
+			
+			# Read existing data or create new
+			try:
+				with pd.ExcelFile(excel_file) as xls:
+					if 'PlayerDetails' in xls.sheet_names:
+						# Read existing PlayerDetails sheet
+						df = pd.read_excel(excel_file, sheet_name='PlayerDetails')
+						# Check if GameStatus column exists, if not add it
+						if 'GameStatus' not in df.columns:
+							df['GameStatus'] = 'Completed'  # Default for existing entries
+					else:
+						# Create new PlayerDetails sheet with headers
+						df = pd.DataFrame(columns=['Username', 'Score', 'Rank', 'Date', 'Time', 'GameStatus'])
+			except Exception as e:
+				print(f"Error reading Excel file: {e}")
+				# Create new DataFrame if reading fails
+				df = pd.DataFrame(columns=['Username', 'Score', 'Rank', 'Date', 'Time', 'GameStatus'])
+			
+			# Get current date and time
+			now = datetime.now()
+			current_date = now.strftime("%Y-%m-%d")
+			current_time = now.strftime("%H:%M:%S")
+			
+			# Create new row
+			new_row = {
+				'Username': username if username else 'Anonymous',
+				'Score': points,
+				'Rank': rank if rank else 'None',
+				'Date': current_date,
+				'Time': current_time,
+				'GameStatus': game_status
+			}
+			
+			# Add new row to DataFrame
+			df = pd.concat([df, pd.DataFrame([new_row])], ignore_index=True)
+			
+			# Save to Excel file
+			with pd.ExcelWriter(excel_file, mode='a', if_sheet_exists='replace') as writer:
+				df.to_excel(writer, sheet_name='PlayerDetails', index=False)
+			
+			print(f"Player details saved successfully: {username} - {points} points - {rank} - {game_status}")
+			return True
+			
+		except Exception as e:
+			print(f"Error saving player details: {e}")
+			traceback.print_exc()
+			return False
+
+	def get_leaderboard_data(self):
+		"""Get top 5 players from PlayerDetails sheet based on points"""
+		try:
+			excel_file = 'scripts/questions.xlsx'
+			
+			if not os.path.exists(excel_file):
+				return []
+			
+			# Read PlayerDetails sheet
+			df = pd.read_excel(excel_file, sheet_name='PlayerDetails')
+			
+			if df.empty:
+				return []
+			
+			# Sort by Score in descending order and get top 5
+			df_sorted = df.sort_values('Score', ascending=False).head(5)
+			
+			# Convert to list of dictionaries
+			leaderboard = []
+			for _, row in df_sorted.iterrows():
+				leaderboard.append({
+					'username': str(row['Username']),
+					'score': int(row['Score']),
+					'rank': str(row['Rank']) if pd.notna(row['Rank']) else 'None',
+					'date': str(row['Date']) if pd.notna(row['Date']) else 'Unknown'
+				})
+			
+			return leaderboard
+			
+		except Exception as e:
+			print(f"Error reading leaderboard data: {e}")
+			return []
+
+	def check_username_exists(self, username):
+		"""Check if a username already exists in the PlayerDetails sheet"""
+		try:
+			excel_file = 'scripts/questions.xlsx'
+			
+			if not os.path.exists(excel_file):
+				return False
+			
+			# Read PlayerDetails sheet
+			df = pd.read_excel(excel_file, sheet_name='PlayerDetails')
+			
+			if df.empty:
+				return False
+			
+			# Check if username exists (case-insensitive)
+			username_exists = df['Username'].str.lower().str.contains(username.lower(), na=False).any()
+			return username_exists
+			
+		except Exception as e:
+			print(f"Error checking username: {e}")
+			return False
 
 	def properties(self):
 		global plats
@@ -883,91 +1075,477 @@ class Game():
 			game_surface.fill((0, 0, 0))
 			world.draw_world()
 
+			# Check for instructions screen first
+			if self.show_instructions:
+				print("Rendering instructions screen!")  # Debug print
+				# Instructions Screen with Professional Black Gradient Background
+				# Create sophisticated gradient background
+				for y in range(screen_height):
+					ratio = y / screen_height
+					r = int(10 * (1 - ratio) + 25 * ratio)
+					g = int(10 * (1 - ratio) + 25 * ratio)
+					b = int(15 * (1 - ratio) + 35 * ratio)
+					pygame.draw.line(game_surface, (r, g, b), (0, y), (screen_width, y))
+				
+				# Add subtle animated stars effect
+				star_positions = [(100, 150), (300, 200), (500, 180), (700, 220), (900, 160)]
+				for i, (x, y) in enumerate(star_positions):
+					star_alpha = int(100 + 50 * abs(math.sin(pygame.time.get_ticks() * 0.001 + i)))
+					star_surface = pygame.Surface((4, 4), pygame.SRCALPHA)
+					pygame.draw.circle(star_surface, (255, 255, 255, star_alpha), (2, 2), 2)
+					game_surface.blit(star_surface, (x, y))
+				
+				# Main title with glow effect
+				title_font = pygame.font.SysFont('comicsansms', int(48 * GameConfig.SCALE_FACTOR))
+				title_text = title_font.render("📚 GAME INSTRUCTIONS 📚", True, (255, 215, 0))
+				title_rect = title_text.get_rect(center=(screen_width // 2, int(80 * GameConfig.SCALE_FACTOR)))
+				
+				# Add glow effect to title
+				glow_surface = pygame.Surface((title_rect.width + 20, title_rect.height + 20), pygame.SRCALPHA)
+				for i in range(10):
+					alpha = 50 - i * 5
+					glow_text = title_font.render("📚 GAME INSTRUCTIONS 📚", True, (255, 215, 0))
+					glow_rect = glow_text.get_rect(center=(glow_surface.get_width() // 2, glow_surface.get_height() // 2))
+					glow_surface.blit(glow_text, glow_rect)
+				game_surface.blit(glow_surface, (title_rect.x - 10, title_rect.y - 10))
+				game_surface.blit(title_text, title_rect)
+				
+				# Create elegant content container
+				content_width = int(800 * GameConfig.SCALE_FACTOR)
+				content_height = int(600 * GameConfig.SCALE_FACTOR)
+				content_x = (screen_width - content_width) // 2
+				content_y = int(140 * GameConfig.SCALE_FACTOR)
+				
+				# Glass effect background for content
+				content_bg = pygame.Surface((content_width, content_height), pygame.SRCALPHA)
+				for y in range(content_height):
+					ratio = y / content_height
+					r = int(20 * (1 - ratio) + 40 * ratio)
+					g = int(20 * (1 - ratio) + 40 * ratio)
+					b = int(30 * (1 - ratio) + 60 * ratio)
+					pygame.draw.line(content_bg, (r, g, b, 200), (0, y), (content_width, y))
+				
+				# Add glass border with glow
+				pygame.draw.rect(content_bg, (255, 255, 255, 40), content_bg.get_rect(), 3, border_radius=25)
+				pygame.draw.rect(content_bg, (100, 150, 255, 120), content_bg.get_rect(), 1, border_radius=25)
+				game_surface.blit(content_bg, (content_x, content_y))
+				
+				# Professional instructions content
+				instructions_content = [
+					("Your mission: Reach the final flag to complete the game and secure your victory.", 0),
+					("Each level is timed — you have 60 seconds to reach the end.", 0),
+					("Stay alert: A dangerous bird enemy appears after 40 seconds to increase the challenge.", 0),
+					("Earn points by answering questions that appear during the level.", 0),
+					
+					("Scoring System:", 1),
+					("• Level 1 questions = 3 points", 1),
+					("• Level 2 questions = 5 points", 1),
+					("• Level 3 questions = 8 points (or 6 points when using AI Assist)", 1),
+					("• You have 15 seconds to answer each question", 1),
+					("• Incorrect answers earn 0 points — choose carefully!", 1),
+
+					("Ranks & Achievements:", 1),
+					("• 🏆 Legend: Score 32 points or more", 1),
+					("• ⚔️ Gladiator: Score 24 points or more", 1),
+					("• 🛡️ Warrior: Score 20 points or more", 1),
+					
+					("Need help? Use AI Assist to receive intelligent hints during tough questions.", 0)
+				]
+
+				
+				# Render instructions with professional formatting
+				section_font = pygame.font.SysFont('comicsansms', int(22 * GameConfig.SCALE_FACTOR))
+				content_font = pygame.font.SysFont('comicsansms', int(18 * GameConfig.SCALE_FACTOR))
+				line_height = int(28 * GameConfig.SCALE_FACTOR)
+				section_spacing = int(35 * GameConfig.SCALE_FACTOR)
+				
+				current_y = content_y + int(40 * GameConfig.SCALE_FACTOR)
+				left_margin = content_x + int(40 * GameConfig.SCALE_FACTOR)
+				right_margin = content_x + content_width - int(40 * GameConfig.SCALE_FACTOR)
+				
+				for instruction_text, indent_level in instructions_content:
+					# Calculate indentation based on indent level
+					indent_offset = int(30 * GameConfig.SCALE_FACTOR * indent_level)
+					text_x = left_margin + indent_offset
+					
+					# Add bullet point for indented items
+					if indent_level > 0:
+						bullet_text = "• " + instruction_text
+					else:
+						bullet_text = instruction_text
+					
+					# Render instruction text with proper wrapping
+					content_lines = self.wrap_text(bullet_text, content_font, right_margin - text_x)
+					for line in content_lines:
+						content_surface = content_font.render(line, True, (220, 220, 220))
+						game_surface.blit(content_surface, (text_x, current_y))
+						current_y += line_height
+					
+					# Add small spacing between instructions
+					current_y += int(10 * GameConfig.SCALE_FACTOR)
+				
+				# Back button with professional styling
+				back_button_width = int(200 * GameConfig.SCALE_FACTOR)
+				back_button_height = int(50 * GameConfig.SCALE_FACTOR)
+				back_button_x = (screen_width - back_button_width) // 2
+				back_button_y = content_y + content_height + int(30 * GameConfig.SCALE_FACTOR)
+				
+				# Create gradient background for back button
+				back_button_bg = pygame.Surface((back_button_width, back_button_height), pygame.SRCALPHA)
+				for y in range(back_button_height):
+					ratio = y / back_button_height
+					r = int(60 * (1 - ratio) + 100 * ratio)
+					g = int(80 * (1 - ratio) + 120 * ratio)
+					b = int(120 * (1 - ratio) + 160 * ratio)
+					pygame.draw.line(back_button_bg, (r, g, b, 220), (0, y), (back_button_width, y))
+				
+				# Add button border and glow
+				pygame.draw.rect(back_button_bg, (255, 255, 255, 60), back_button_bg.get_rect(), 2, border_radius=15)
+				pygame.draw.rect(back_button_bg, (100, 150, 255, 150), back_button_bg.get_rect(), 1, border_radius=15)
+				game_surface.blit(back_button_bg, (back_button_x, back_button_y))
+				
+				# Back button text
+				back_text_font = pygame.font.SysFont('comicsansms', int(20 * GameConfig.SCALE_FACTOR))
+				back_text = back_text_font.render("← Back to Menu", True, (255, 255, 255))
+				back_text_rect = back_text.get_rect(center=(back_button_x + back_button_width // 2, back_button_y + back_button_height // 2))
+				game_surface.blit(back_text, back_text_rect)
+				
+				# Handle back button click
+				back_button_rect = pygame.Rect(back_button_x, back_button_y, back_button_width, back_button_height)
+				if pygame.mouse.get_pressed()[0]:  # Left mouse button
+					mouse_pos = pygame.mouse.get_pos()
+					adjusted_mouse_pos = (mouse_pos[0] - surf_x, mouse_pos[1] - surf_y)
+					if back_button_rect.collidepoint(adjusted_mouse_pos):
+						self.show_instructions = False
+			
 			# setup main menu
-			if in_menu:
-				# --- Draw Game Title ---
+			elif in_menu:
+				# Create beautiful gradient black background for main menu
+				menu_bg = pygame.Surface((screen_width, screen_height), pygame.SRCALPHA)
+				# Create a sophisticated dark gradient: black to dark blue to dark purple
+				for y in range(screen_height):
+					ratio = y / screen_height
+					# Start with pure black, transition to dark blue, then to dark purple
+					if ratio < 0.3:
+						# Black to dark blue (first 30%)
+						progress = ratio / 0.3
+						r = int(0 + 20 * progress)
+						g = int(0 + 30 * progress)
+						b = int(0 + 50 * progress)
+					elif ratio < 0.7:
+						# Dark blue to dark purple (30% to 70%)
+						progress = (ratio - 0.3) / 0.4
+						r = int(20 + 30 * progress)
+						g = int(30 + 20 * progress)
+						b = int(50 + 40 * progress)
+					else:
+						# Dark purple to very dark purple (last 30%)
+						progress = (ratio - 0.7) / 0.3
+						r = int(50 + 20 * progress)
+						g = int(50 + 15 * progress)
+						b = int(90 + 25 * progress)
+					
+					pygame.draw.line(menu_bg, (r, g, b, 255), (0, y), (screen_width, y))
+				
+				# Add subtle animated stars/particles effect
+				star_alpha = int(100 + 50 * (pygame.time.get_ticks() % 2000) / 2000)
+				for i in range(20):
+					star_x = (i * 97) % screen_width
+					star_y = (i * 73 + pygame.time.get_ticks() // 50) % screen_height
+					star_size = 1 + (i % 3)
+					pygame.draw.circle(menu_bg, (255, 255, 255, star_alpha), (star_x, star_y), star_size)
+				
+				game_surface.blit(menu_bg, (0, 0))
+				
+				# --- Draw Game Title with Glow Effect ---
 				title_font = pygame.font.SysFont('comicsansms', int(48 * GameConfig.SCALE_FACTOR))
 				title_text = title_font.render("🎮 MAZE RUNNER 🎮", True, (255, 215, 0))
 				title_rect = title_text.get_rect(center=(screen_width // 2, int(80 * GameConfig.SCALE_FACTOR)))
+				
+				# Draw title glow effect
+				glow_font = pygame.font.SysFont('comicsansms', int(48 * GameConfig.SCALE_FACTOR))
+				glow_text = glow_font.render("🎮 MAZE RUNNER 🎮", True, (255, 215, 0, 50))
+				glow_rect = glow_text.get_rect(center=(screen_width // 2 + 2, int(80 * GameConfig.SCALE_FACTOR) + 2))
+				game_surface.blit(glow_text, glow_rect)
+				
+				# Draw main title
 				game_surface.blit(title_text, title_rect)
 				
-				# --- Draw Rules in Compact Format ---
-				rules = [
-					("Reach the final flag to finish the game.", 0),
-					("30 seconds per level • Bird appears after 20s", 0),
-					("Answer questions to earn points:", 0),
-					("Level 1 = 3 pts • Level 2 = 5 pts • Level 3 = 8 pts (6 with AI)", 1),
-					("15s question timer • Wrong = 0 points", 1),
-					("🏆 Legend: 32+ • ⚔️ Gladiator: 24+ • 🛡️ Warrior: 20+", 1),
-					("Use AI Assist for hints • Score 20+ to unlock Level 2!", 0)
-				]
-				rules_font = pygame.font.SysFont('comicsansms', int(22 * GameConfig.SCALE_FACTOR))
-				line_height = int(28 * GameConfig.SCALE_FACTOR)
-				total_height = len(rules) * line_height
+				# --- Clean Two-Column Layout ---
+				# Calculate column positions for perfect symmetry
+				column_width = int(400 * GameConfig.SCALE_FACTOR)
+				column_spacing = int(100 * GameConfig.SCALE_FACTOR)
+				total_width = (2 * column_width) + column_spacing
+				start_x = (screen_width - total_width) // 2
 				
-				# Position rules in upper portion, above buttons
-				start_y = int(150 * GameConfig.SCALE_FACTOR)
-				box_width = int(screen_width * 0.75)
-				box_height = total_height + int(40 * GameConfig.SCALE_FACTOR)
-				box_x = (screen_width - box_width) // 2
-				box_y = start_y - int(20 * GameConfig.SCALE_FACTOR)
+				# Column 1: Username Input and Play Button (Left)
+				left_x = start_x
+				left_y = int(180 * GameConfig.SCALE_FACTOR)
+				left_width = column_width
+				left_height = int(450 * GameConfig.SCALE_FACTOR)
 				
-				# Create elegant gradient background
-				rules_bg = pygame.Surface((box_width, box_height), pygame.SRCALPHA)
-				# Gradient from dark blue to purple
-				for y in range(box_height):
-					ratio = y / box_height
-					r = int(25 * (1 - ratio) + 40 * ratio)
-					g = int(25 * (1 - ratio) + 30 * ratio)
-					b = int(50 * (1 - ratio) + 80 * ratio)
-					pygame.draw.line(rules_bg, (r, g, b), (0, y), (box_width, y))
+				# Create left section background with glass effect
+				left_bg = pygame.Surface((left_width, left_height), pygame.SRCALPHA)
+				for y in range(left_height):
+					ratio = y / left_height
+					r = int(40 * (1 - ratio) + 70 * ratio)
+					g = int(50 * (1 - ratio) + 60 * ratio)
+					b = int(90 * (1 - ratio) + 130 * ratio)
+					pygame.draw.line(left_bg, (r, g, b, 180), (0, y), (left_width, y))
 				
-				# Add border and shadow effect
-				pygame.draw.rect(rules_bg, (255, 255, 255, 50), rules_bg.get_rect(), 2)
-				game_surface.blit(rules_bg, (box_x, box_y))
+				# Add glass border
+				pygame.draw.rect(left_bg, (255, 255, 255, 30), left_bg.get_rect(), 3, border_radius=20)
+				pygame.draw.rect(left_bg, (100, 150, 255, 100), left_bg.get_rect(), 1, border_radius=20)
+				game_surface.blit(left_bg, (left_x, left_y))
 				
-				# Draw rules with better formatting
-				left_margin = box_x + int(30 * GameConfig.SCALE_FACTOR)
-				for i, (line, indent) in enumerate(rules):
-					color = (255, 255, 255) if indent == 0 else (200, 220, 255)
-					bullet_str = "▶ " if indent == 0 else "   • "
-					text = bullet_str + line
-					text_surface = rules_font.render(text, True, color)
-					x_pos = left_margin + (indent * int(20 * GameConfig.SCALE_FACTOR))
-					y_pos = start_y + i * line_height
-					game_surface.blit(text_surface, (x_pos, y_pos))
+				# Left section title
+				left_title_font = pygame.font.SysFont('comicsansms', int(26 * GameConfig.SCALE_FACTOR))
+				left_title = left_title_font.render("🎮 START GAME 🎮", True, (255, 215, 0))
+				left_title_rect = left_title.get_rect(center=(left_x + left_width // 2, left_y + int(30 * GameConfig.SCALE_FACTOR)))
+				game_surface.blit(left_title, left_title_rect)
 				
-				# --- Draw Buttons in Bottom Section ---
-				# Position buttons in the bottom third of the screen
-				button_y = screen_height - int(200 * GameConfig.SCALE_FACTOR)
-				self.play_button.rect.centery = button_y
-				self.quit_button.rect.centery = button_y + int(90 * GameConfig.SCALE_FACTOR)
+				# Username label
+				username_label_font = pygame.font.SysFont('comicsansms', int(22 * GameConfig.SCALE_FACTOR))
+				username_label = username_label_font.render("Enter Username:", True, (255, 255, 255))
+				label_x = left_x + int(40 * GameConfig.SCALE_FACTOR)
+				label_y = left_y + int(100 * GameConfig.SCALE_FACTOR)
+				game_surface.blit(username_label, (label_x, label_y))
+				
+				# Username input field
+				username_y = label_y + username_label.get_height() + int(20 * GameConfig.SCALE_FACTOR)
+				username_width = left_width - int(80 * GameConfig.SCALE_FACTOR)
+				username_height = int(55 * GameConfig.SCALE_FACTOR)
+				username_x = left_x + int(40 * GameConfig.SCALE_FACTOR)
+				
+				# Create gradient background for username field
+				username_bg = pygame.Surface((username_width, username_height), pygame.SRCALPHA)
+				if self.username_active:
+					# Active state: Blue to purple gradient with glow effect
+					for y in range(username_height):
+						ratio = y / username_height
+						r = int(100 * (1 - ratio) + 150 * ratio)
+						g = int(150 * (1 - ratio) + 100 * ratio)
+						b = int(255 * (1 - ratio) + 200 * ratio)
+						pygame.draw.line(username_bg, (r, g, b, 180), (0, y), (username_width, y))
+					
+					# Add glowing border
+					pygame.draw.rect(username_bg, (255, 255, 255, 100), username_bg.get_rect(), 4, border_radius=15)
+					pygame.draw.rect(username_bg, (100, 200, 255, 255), username_bg.get_rect(), 2, border_radius=15)
+				else:
+					# Inactive state: Subtle gradient with border
+					for y in range(username_height):
+						ratio = y / username_height
+						r = int(60 * (1 - ratio) + 80 * ratio)
+						g = int(80 * (1 - ratio) + 100 * ratio)
+						b = int(120 * (1 - ratio) + 140 * ratio)
+						pygame.draw.line(username_bg, (r, g, b, 120), (0, y), (username_width, y))
+					
+					pygame.draw.rect(username_bg, (255, 255, 255, 80), username_bg.get_rect(), 2, border_radius=15)
+				
+				game_surface.blit(username_bg, (username_x, username_y))
+				
+				# Username text inside the field
+				username_font = pygame.font.SysFont('comicsansms', int(22 * GameConfig.SCALE_FACTOR))
+				if self.username:
+					username_text = username_font.render(self.username, True, (255, 255, 255))
+				else:
+					username_text = username_font.render("Type here...", True, (200, 200, 200))
+				
+				text_x = username_x + int(25 * GameConfig.SCALE_FACTOR)
+				text_y = username_y + (username_height - username_text.get_height()) // 2
+				game_surface.blit(username_text, (text_x, text_y))
+				
+				# Animated cursor with glow effect
+				if self.username_active and (self.cursor_blink_timer // 30) % 2 == 0:
+					cursor_x = text_x + username_text.get_width() + 3
+					cursor_y = text_y
+					cursor_height = username_text.get_height()
+					# Draw glowing cursor
+					pygame.draw.line(game_surface, (255, 255, 255, 100), (cursor_x-1, cursor_y), (cursor_x-1, cursor_y + cursor_height), 4)
+					pygame.draw.line(game_surface, (100, 200, 255, 255), (cursor_x, cursor_y), (cursor_x, cursor_y + cursor_height), 2)
+				
+				# Username input box click detection and cursor change
+				username_rect = pygame.Rect(username_x, username_y, username_width, username_height)
+				if username_rect.collidepoint(pygame.mouse.get_pos()):
+					pygame.mouse.set_cursor(pygame.SYSTEM_CURSOR_IBEAM)
+				else:
+					pygame.mouse.set_cursor(pygame.SYSTEM_CURSOR_ARROW)
+
+				# Play button below username field
+				play_button_y = username_y + username_height + int(40 * GameConfig.SCALE_FACTOR)
+				self.play_button.rect.topleft = (left_x + (left_width - self.play_button.rect.width) // 2, play_button_y)
+				
+				# Position instructions button
+				instructions_button_y = play_button_y + self.play_button.rect.height + int(25 * GameConfig.SCALE_FACTOR)
+				self.instructions_button.rect.topleft = (left_x + (left_width - self.instructions_button.rect.width) // 2, instructions_button_y)
+				
+
+				
+				# Display username error message if needed
+				if self.show_duplicate_message:
+					error_font = pygame.font.SysFont('comicsansms', int(18 * GameConfig.SCALE_FACTOR))
+					if self.username_error_type == "missing":
+						error_text = error_font.render("⚠️  Please enter a username to continue!", True, (255, 100, 100))
+					else:  # duplicate
+						error_text = error_font.render("Username has already been used!", True, (255, 100, 100))
+					error_rect = error_text.get_rect(center=(left_x + left_width // 2, play_button_y + self.play_button.rect.height + int(100 * GameConfig.SCALE_FACTOR)))
+					game_surface.blit(error_text, error_rect)
+				
+				# Column 2: Leaderboard (Right)
+				leaderboard_x = start_x + column_width + column_spacing
+				leaderboard_y = int(180 * GameConfig.SCALE_FACTOR)
+				leaderboard_width = column_width
+				leaderboard_height = int(450 * GameConfig.SCALE_FACTOR)
+				
+				# Create leaderboard background with glass effect
+				leaderboard_bg = pygame.Surface((leaderboard_width, leaderboard_height), pygame.SRCALPHA)
+				for y in range(leaderboard_height):
+					ratio = y / leaderboard_height
+					alpha = int(180 * (1 - ratio) + 220 * ratio)
+					pygame.draw.line(leaderboard_bg, (20, 30, 50, alpha), (0, y), (leaderboard_width, y))
+				
+				# Add glass border
+				pygame.draw.rect(leaderboard_bg, (255, 255, 255, 30), leaderboard_bg.get_rect(), 3, border_radius=20)
+				pygame.draw.rect(leaderboard_bg, (100, 150, 255, 80), leaderboard_bg.get_rect(), 1, border_radius=20)
+				game_surface.blit(leaderboard_bg, (leaderboard_x, leaderboard_y))
+				
+				# Leaderboard title
+				leaderboard_title_font = pygame.font.SysFont('comicsansms', int(26 * GameConfig.SCALE_FACTOR))
+				leaderboard_title = leaderboard_title_font.render("🏆 LEADERBOARD 🏆", True, (255, 215, 0))
+				leaderboard_title_rect = leaderboard_title.get_rect(center=(leaderboard_x + leaderboard_width // 2, leaderboard_y + int(30 * GameConfig.SCALE_FACTOR)))
+				game_surface.blit(leaderboard_title, leaderboard_title_rect)
+				
+				# Get and display leaderboard data
+				leaderboard_data = self.get_leaderboard_data()
+				if leaderboard_data:
+					entry_height = int(50 * GameConfig.SCALE_FACTOR)
+					entry_spacing = int(12 * GameConfig.SCALE_FACTOR)
+					start_y = leaderboard_y + int(80 * GameConfig.SCALE_FACTOR)
+					
+					for i, entry in enumerate(leaderboard_data):
+						entry_y = start_y + i * (entry_height + entry_spacing)
+						
+						# Medal emojis for top 3
+						medal = "🥇" if i == 0 else "🥈" if i == 1 else "🥉" if i == 2 else f"{i+1}."
+						
+						# Entry background with rank-based colors
+						entry_bg = pygame.Surface((leaderboard_width - int(40 * GameConfig.SCALE_FACTOR), entry_height), pygame.SRCALPHA)
+						if i == 0:  # Gold
+							color = (255, 215, 0, 100)
+						elif i == 1:  # Silver
+							color = (192, 192, 192, 100)
+						elif i == 2:  # Bronze
+							color = (205, 127, 50, 100)
+						else:  # Regular
+							color = (255, 255, 255, 60)
+						
+						entry_bg.fill(color)
+						pygame.draw.rect(entry_bg, (255, 255, 255, 80), entry_bg.get_rect(), 2, border_radius=12)
+						
+						entry_x = leaderboard_x + int(20 * GameConfig.SCALE_FACTOR)
+						game_surface.blit(entry_bg, (entry_x, entry_y))
+						
+						# Medal and rank
+						medal_font = pygame.font.SysFont('comicsansms', int(22 * GameConfig.SCALE_FACTOR))
+						medal_text = medal_font.render(medal, True, (255, 255, 255))
+						medal_rect = medal_text.get_rect(midleft=(entry_x + int(15 * GameConfig.SCALE_FACTOR), entry_y + entry_height // 2))
+						game_surface.blit(medal_text, medal_rect)
+						
+						# Username
+						username_font = pygame.font.SysFont('comicsansms', int(18 * GameConfig.SCALE_FACTOR))
+						username_text = username_font.render(entry['username'][:15], True, (255, 255, 255))
+						username_rect = username_text.get_rect(midleft=(entry_x + int(70 * GameConfig.SCALE_FACTOR), entry_y + entry_height // 2))
+						game_surface.blit(username_text, username_rect)
+						
+						# Score
+						score_font = pygame.font.SysFont('comicsansms', int(20 * GameConfig.SCALE_FACTOR))
+						score_text = score_font.render(str(entry['score']), True, (255, 215, 0))
+						score_rect = score_text.get_rect(midright=(entry_x + leaderboard_width - int(60 * GameConfig.SCALE_FACTOR), entry_y + entry_height // 2))
+						game_surface.blit(score_text, score_rect)
+						
+						# Rank (if available)
+						if entry['rank'] != 'None':
+							rank_font = pygame.font.SysFont('comicsansms', int(14 * GameConfig.SCALE_FACTOR))
+							rank_text = rank_font.render(entry['rank'], True, (200, 220, 255))
+							rank_rect = rank_text.get_rect(midright=(entry_x + leaderboard_width - int(20 * GameConfig.SCALE_FACTOR), entry_y + entry_height // 2))
+							game_surface.blit(rank_text, rank_rect)
+				else:
+					# No data message
+					no_data_font = pygame.font.SysFont('comicsansms', int(20 * GameConfig.SCALE_FACTOR))
+					no_data_text = no_data_font.render("No leaderboard data yet", True, (150, 150, 150))
+					no_data_rect = no_data_text.get_rect(center=(leaderboard_x + leaderboard_width // 2, leaderboard_y + int(250 * GameConfig.SCALE_FACTOR)))
+					game_surface.blit(no_data_text, no_data_rect)
 
 				surf_x = (display_width - GAME_SURFACE_WIDTH) // 2
 				surf_y = (display_height - GAME_SURFACE_HEIGHT) // 2
-				if self.quit_button.draw(game_surface, offset=(surf_x, surf_y)):
-					run = False
+				
+
+				
 				if self.play_button.draw(game_surface, offset=(surf_x, surf_y)):
-					in_menu = False
-					in_domain_select = True
-					points = 0  # Reset points when starting new game
-					self.timer_started = False
+					# Check if username is entered
+					if not self.username.strip():
+						self.show_duplicate_message = True
+						self.username_error_type = "missing"
+						self.duplicate_message_timer = 180  # Show message for 3 seconds (60 FPS * 3)
+					# Check if username already exists before proceeding
+					elif self.username.strip() and self.check_username_exists(self.username.strip()):
+						self.show_duplicate_message = True
+						self.username_error_type = "duplicate"
+						self.duplicate_message_timer = 180  # Show message for 3 seconds (60 FPS * 3)
+					else:
+						in_menu = False
+						in_domain_select = True
+						points = 0  # Reset points when starting new game
+						self.timer_started = False
+						# Reset all game state variables to ensure clean start
+						global selected_domain, game_over, game_finished, current_level
+						selected_domain = None
+						game_over = 0
+						game_finished = False
+						current_level = 0
+						self.level1_wrong_answers = 0  # Reset Level 1 wrong answer counter
+				
+				# Handle instructions button click
+				if self.instructions_button.draw(game_surface, offset=(surf_x, surf_y)):
+					print("Instructions button clicked!")  # Debug print
+					self.show_instructions = True
+					print(f"show_instructions set to: {self.show_instructions}")  # Debug print
+
+			
 			elif in_domain_select:
 				# Draw domain selection screen
 				title_font = pygame.font.SysFont('comicsansms', int(40 * GameConfig.SCALE_FACTOR))
 				title_text = title_font.render("Choose a Domain", True, (255, 215, 0))
 				title_rect = title_text.get_rect(center=(screen_width // 2, int(120 * GameConfig.SCALE_FACTOR)))
 				game_surface.blit(title_text, title_rect)
+
 				for domain, btn in self.domain_buttons:
 					if btn.draw(game_surface, offset=(surf_x, surf_y)):
 						selected_domain = domain
 						in_domain_select = False
+
 						# Pass the selected domain's sheet name to QuestionUI
 						enabled_domains = GameConfig.get_enabled_domains()
 						sheet_name = enabled_domains[selected_domain]
-						self.question_ui = QuestionUI(game_surface, sheet_name)
-						self.game_timer()  # Start timer only after domain is selected
-						self.timer_started = True
+
+						try:
+							self.question_ui = QuestionUI(game_surface, sheet_name)
+							# Reload level to get fresh game objects
+							values = self.load_level()
+							player = values[0]
+							world = values[1]
+							chaser = values[2]
+
+							# Start timer only after domain is selected
+							self.game_timer()
+							self.timer_started = True
+
+						except Exception as e:
+							print(f"Error loading domain {selected_domain}: {e}")
+							# If there's an error, go back to domain selection
+							in_domain_select = True
+							selected_domain = None
+
 			else:
 				world.draw_tiles()
 				check_points[0].draw(game_surface)
@@ -985,7 +1563,13 @@ class Game():
 						timer_rect.topleft = (60, 42)
 						game_surface.blit(timer_surface, timer_rect)
 
+						# Draw score
 						game_surface.blit(self.score_font.render(f"Score: {points}", True, (47, 48, 29)), (screen_width - 150, 42))
+						
+						# Draw username if available
+						if self.username:
+							username_surface = self.score_font.render(f"Player: {self.username}", True, (47, 48, 29))
+							game_surface.blit(username_surface, (60, 70))
 					
 					# Check for collision between player and chaser
 					if chaser.rect.colliderect(player.rect):
@@ -1086,33 +1670,53 @@ class Game():
 					self.timer_counter = 0
 					self.timer_started = False  # Reset timer started flag
 					
-					# Draw game over message and score
-					title_font = pygame.font.SysFont('comicsansms', 50)
-					subtitle_font = pygame.font.SysFont('comicsansms', 30)
+					# Save player details when game ends (game over or insufficient points)
+					if not self.player_details_saved:
+						rank = None
+						if points >= 30:
+							rank = 'Legend'
+						elif points >= 24:
+							rank = 'Gladiator'
+						elif points >= 20:
+							rank = 'Warrior'
+						
+						# Save player details with game status
+						game_status = "Insufficient Points" if self.insufficient_points else "Game Over"
+						if self.save_player_details(self.username, points, rank, game_status):
+							self.player_details_saved = True
+					
+					# Draw game over message and score with gradient box
+					title_font = pygame.font.SysFont('comicsansms', int(50 * GameConfig.SCALE_FACTOR))
+					subtitle_font = pygame.font.SysFont('comicsansms', int(30 * GameConfig.SCALE_FACTOR))
+					
+					# Prepare all text elements first to calculate box size
+					text_elements = []
 					
 					if self.insufficient_points:
 						# Main title for insufficient points
-						title = title_font.render("Better Luck Next Time!", True, (255, 0, 0))
-						title_rect = title.get_rect(center=(screen_width//2, screen_height//2 - 100))
+						title = title_font.render("Better Luck Next Time!", True, (255, 255, 255))
+						text_elements.append(title)
 						
 						# Score message
 						score_text = subtitle_font.render(f"Points Required: {POINTS_THRESHOLD}, Your Score: {points}", True, (255, 255, 255))
-						score_rect = score_text.get_rect(center=(screen_width//2, screen_height//2 - 30))
+						text_elements.append(score_text)
 					else:
 						# Regular game over message
-						title = title_font.render("Game Over!", True, (255, 0, 0))
-						title_rect = title.get_rect(center=(screen_width//2, screen_height//2 - 100))
+						title = title_font.render("Game Over!", True, (255, 255, 255))
+						text_elements.append(title)
 						
 						# Score message
 						score_text = subtitle_font.render(f"Total Score: {points}", True, (255, 255, 255))
-						score_rect = score_text.get_rect(center=(screen_width//2, screen_height//2 - 30))
+						text_elements.append(score_text)
+						
+						# Username message
+						if self.username:
+							username_text = subtitle_font.render(f"Player: {self.username}", True, (255, 255, 255))
+							text_elements.append(username_text)
 					
-					# Draw the messages
-					game_surface.blit(title, title_rect)
-					game_surface.blit(score_text, score_rect)
-
 					# --- Show Rank (Game Over) ---
 					rank = None
+					rank_text = None
 					if points >= 30:
 						rank = 'Legend'
 					elif points >= 24:
@@ -1120,27 +1724,119 @@ class Game():
 					elif points >= 20:
 						rank = 'Warrior'
 					if rank:
-						rank_font = pygame.font.SysFont('comicsansms', 40)
+						rank_font = pygame.font.SysFont('comicsansms', int(40 * GameConfig.SCALE_FACTOR))
 						rank_text = rank_font.render(f'Rank: {rank}', True, (255, 215, 0))
-						rank_rect = rank_text.get_rect(center=(screen_width//2, score_rect.bottom + 50))
+						text_elements.append(rank_text)
+					
+					# Calculate box dimensions based on text elements
+					max_width = max([text.get_width() for text in text_elements]) if text_elements else 400
+					padding = int(60 * GameConfig.SCALE_FACTOR)
+					box_width = max_width + padding * 2
+					box_height = int(350 * GameConfig.SCALE_FACTOR)  # Fixed height for consistent appearance
+					
+					# Center the box on screen
+					box_x = (screen_width - box_width) // 2
+					box_y = (screen_height - box_height) // 2 - int(50 * GameConfig.SCALE_FACTOR)
+					box_rect = pygame.Rect(box_x, box_y, box_width, box_height)
+					
+					# Draw gradient background box
+					if self.insufficient_points:
+						# Red gradient for insufficient points
+						draw_gradient_box(game_surface, box_rect, (80, 20, 20), (40, 10, 10), 220)
+					else:
+						# Blue-purple gradient for regular game over
+						draw_gradient_box(game_surface, box_rect, (30, 30, 80), (15, 15, 40), 220)
+					
+					# Position and draw text elements within the box
+					current_y = box_y + padding
+					line_spacing = int(50 * GameConfig.SCALE_FACTOR)
+					
+					# Draw title
+					title_rect = title.get_rect(center=(screen_width//2, current_y + title.get_height()//2))
+					game_surface.blit(title, title_rect)
+					current_y += title.get_height() + line_spacing
+					
+					# Draw score
+					score_rect = score_text.get_rect(center=(screen_width//2, current_y + score_text.get_height()//2))
+					game_surface.blit(score_text, score_rect)
+					current_y += score_text.get_height() + line_spacing
+					
+					# Draw username if present
+					if self.username and not self.insufficient_points:
+						username_text = subtitle_font.render(f"Player: {self.username}", True, (255, 255, 255))
+						username_rect = username_text.get_rect(center=(screen_width//2, current_y + username_text.get_height()//2))
+						game_surface.blit(username_text, username_rect)
+						current_y += username_text.get_height() + line_spacing
+					
+					# Draw rank if present
+					if rank_text:
+						rank_rect = rank_text.get_rect(center=(screen_width//2, current_y + rank_text.get_height()//2))
 						game_surface.blit(rank_text, rank_rect)
+						current_y += rank_text.get_height() + line_spacing
+					
+					# Update bottom_text_y for button positioning
+					bottom_text_y = current_y
+					
+					# Position restart button below all text with generous spacing
+					restart_button_y = bottom_text_y + int(80 * GameConfig.SCALE_FACTOR)
+					
+					# Ensure button doesn't go below screen bounds
+					if restart_button_y + self.resume_button.rect.height > screen_height - int(50 * GameConfig.SCALE_FACTOR):
+						restart_button_y = screen_height - int(50 * GameConfig.SCALE_FACTOR) - self.resume_button.rect.height
+					
+					# Update button position
+					restart_x = screen_width // 2 - self.resume_button.rect.width // 2
+					self.resume_button.rect.topleft = (restart_x, restart_button_y)
 
 					if self.resume_button.draw(game_surface, offset=(surf_x, surf_y)):
-						values = self.load_level()
-						player = values[0]
-						world = values[1]
-						chaser = values[2]
-						self.game_timer()
-						self.timer_started = True  # Mark timer as started
-						self.insufficient_points = False  # Reset insufficient points flag
-						points = 0  # Reset points when restarting after game over
-					if self.quit_button.draw(game_surface, offset=(surf_x, surf_y)):
-						run = False
+						# Reset game state and go back to main menu
+						current_level = 0
+						points = 0
+						game_finished = False
+						game_over = 0
+						in_menu = True
+						in_domain_select = False
+						
+						# Reset timer
+						self.timer_counter = 0
+						self.timer_started = False
+						
+						# Reset insufficient points flag
+						self.insufficient_points = False
+						
+						# Reset question UI and question pool
+						if self.question_ui:
+							self.question_ui.reset()
+							self.question_ui.reset_question_pool()
+						
+						# Reset platform states
+						self.reset_platform_states()
+						
+						# Reset player details saved flag for new game
+						self.player_details_saved = False
+						
+						# Reset Level 1 wrong answer counter
+						self.level1_wrong_answers = 0
 
 				# player won
 				if game_finished:
 					self.timer_counter = 0
 					self.timer_started = False  # Reset timer started flag
+					
+					# Save player details to Excel when game is finished (only once)
+					if not self.player_details_saved:
+						rank = None
+						if points >= 30:
+							rank = 'Legend'
+						elif points >= 24:
+							rank = 'Gladiator'
+						elif points >= 20:
+							rank = 'Warrior'
+						
+						# Save player details
+						if self.save_player_details(self.username, points, rank, "Completed"):
+							self.player_details_saved = True
+					
 					# Draw improved congratulatory message
 					title_font = pygame.font.SysFont('comicsansms', 56)
 					subtitle_font = pygame.font.SysFont('comicsansms', 32)
@@ -1152,8 +1848,8 @@ class Game():
 					# Calculate background box size
 					padding_x = int(60 * GameConfig.SCALE_FACTOR)
 					padding_y = int(40 * GameConfig.SCALE_FACTOR)
-					box_width = max(title.get_width(), subtitle.get_width()) + 2 * padding_x
-					box_height = title.get_height() + subtitle.get_height() + 3 * padding_y
+					box_width = max(title.get_width(), subtitle.get_width(), username_text.get_width()) + 2 * padding_x
+					box_height = title.get_height() + subtitle.get_height() + username_text.get_height() + 4 * padding_y
 					box_x = (screen_width - box_width) // 2
 					box_y = (screen_height - box_height) // 2
 
@@ -1166,29 +1862,119 @@ class Game():
 					# Draw the messages with extra spacing
 					title_rect = title.get_rect(center=(screen_width//2, box_y + padding_y + title.get_height()//2))
 					subtitle_rect = subtitle.get_rect(center=(screen_width//2, title_rect.bottom + padding_y + subtitle.get_height()//2))
+					username_rect = username_text.get_rect(center=(screen_width//2, subtitle_rect.bottom + padding_y + username_text.get_height()//2))
 					game_surface.blit(title, title_rect)
 					game_surface.blit(subtitle, subtitle_rect)
+					game_surface.blit(username_text, username_rect)
 
 					# --- Show Rank (Game Finished) ---
-					rank = None
-					if points >= 30:
-						rank = 'Legend'
-					elif points >= 24:
-						rank = 'Gladiator'
-					elif points >= 20:
-						rank = 'Warrior'
 					if rank:
 						rank_font = pygame.font.SysFont('comicsansms', 44)
 						rank_text = rank_font.render(f'Rank: {rank}', True, (255, 215, 0))
 						rank_rect = rank_text.get_rect(center=(screen_width//2, subtitle_rect.bottom + 60))
 						game_surface.blit(rank_text, rank_rect)
 
-					if self.quit_button.draw(game_surface, offset=(surf_x, surf_y)):
-						run = False
+					# --- Add Restart Button ---
+					restart_font = pygame.font.SysFont('comicsansms', int(32 * GameConfig.SCALE_FACTOR))
+					restart_colors = ((41, 128, 185), (142, 68, 173))  # Blue to purple gradient
+					restart_button_width = int(200 * GameConfig.SCALE_FACTOR)
+					restart_button_height = int(60 * GameConfig.SCALE_FACTOR)
+					
+					# Position restart button below rank or subtitle
+					if rank:
+						restart_y = rank_rect.bottom + int(40 * GameConfig.SCALE_FACTOR)
+					else:
+						restart_y = subtitle_rect.bottom + int(40 * GameConfig.SCALE_FACTOR)
+					
+					restart_x = screen_width // 2 - restart_button_width // 2
+					restart_button = create_text_button("Restart", restart_x, restart_y, restart_button_width, restart_button_height, restart_font, restart_colors)
+					
+					if restart_button.draw(game_surface, offset=(surf_x, surf_y)):
+						# Reset game state and go back to main menu
+						current_level = 0
+						points = 0
+						game_finished = False
+						game_over = 0
+						in_menu = True
+						in_domain_select = False
+						
+						# Reset timer
+						self.timer_counter = 0
+						self.timer_started = False
+						
+						# Reset insufficient points flag
+						self.insufficient_points = False
+						
+						# Reset question UI and question pool
+						if self.question_ui:
+							self.question_ui.reset()
+							self.question_ui.reset_question_pool()
+						
+						# Reset platform states
+						self.reset_platform_states()
+						
+						# Reset player details saved flag for new game
+						self.player_details_saved = False
+						
+						# Reset Level 1 wrong answer counter
+						self.level1_wrong_answers = 0
+
 
 			for event in pygame.event.get():
 				if event.type == pygame.QUIT:
 					run = False
+
+				# Handle username input events
+				if in_menu:
+					if event.type == pygame.MOUSEBUTTONDOWN:
+						# Check if username field was clicked - account for screen offset
+						# Calculate column positions for perfect symmetry
+						column_width = int(400 * GameConfig.SCALE_FACTOR)
+						column_spacing = int(100 * GameConfig.SCALE_FACTOR)
+						total_width = (2 * column_width) + column_spacing
+						start_x = (screen_width - total_width) // 2
+						
+						# Left column position
+						left_x = start_x
+						left_y = int(180 * GameConfig.SCALE_FACTOR)
+						
+						# Username field position in left column
+						username_label_font = pygame.font.SysFont('comicsansms', int(22 * GameConfig.SCALE_FACTOR))
+						username_label = username_label_font.render("Enter Username:", True, (255, 255, 255))
+						username_y = left_y + int(100 * GameConfig.SCALE_FACTOR) + username_label.get_height() + int(20 * GameConfig.SCALE_FACTOR)
+						username_width = column_width - int(80 * GameConfig.SCALE_FACTOR)
+						username_height = int(55 * GameConfig.SCALE_FACTOR)
+						username_x = left_x + int(40 * GameConfig.SCALE_FACTOR)
+						
+						# Calculate screen offset
+						surf_x = (display_width - GAME_SURFACE_WIDTH) // 2
+						surf_y = (display_height - GAME_SURFACE_HEIGHT) // 2
+						
+						# Adjust mouse position for screen offset
+						adjusted_pos = (event.pos[0] - surf_x, event.pos[1] - surf_y)
+						username_rect = pygame.Rect(username_x, username_y, username_width, username_height)
+						
+						if username_rect.collidepoint(adjusted_pos):
+							self.username_active = True
+						else:
+							self.username_active = False
+					
+					elif event.type == pygame.KEYDOWN and self.username_active:
+						if event.key == pygame.K_RETURN:
+							# Check if username already exists
+							if self.username.strip() and self.check_username_exists(self.username.strip()):
+								self.show_duplicate_message = True
+								self.duplicate_message_timer = 180  # Show message for 3 seconds (60 FPS * 3)
+							else:
+								self.username_active = False
+						elif event.key == pygame.K_BACKSPACE:
+							self.username = self.username[:-1]
+						elif event.key == pygame.K_TAB:
+							self.username_active = False
+						elif len(self.username) < 20:  # Limit username length
+							# Only allow alphanumeric characters and spaces
+							if event.unicode.isalnum() or event.unicode.isspace():
+								self.username += event.unicode
 
 				# Handle question UI events with offset
 				if self.question_ui:
@@ -1211,6 +1997,22 @@ class Game():
 							else:
 								# fallback if complexity missing
 								points += GameConfig.POINTS['fallback_ai'] if used_ask_ai else GameConfig.POINTS['fallback']
+						else:
+							# Question was answered incorrectly
+							# Get complexity from current question
+							complexity = self.question_ui.current_question.get('complexity', '').strip().lower()
+							if complexity in ['2', 'level 2', '3', 'level 3']:
+								# Game ends for incorrect Level 2 or Level 3 answers
+								game_over = -1
+								print(f"Game over: Incorrect answer for {complexity} question")
+							elif complexity in ['1', 'level 1']:
+								# Increment Level 1 wrong answer counter
+								self.level1_wrong_answers += 1
+								print(f"Level 1 wrong answer #{self.level1_wrong_answers}")
+								if self.level1_wrong_answers >= 2:
+									# Game ends after 2 incorrect Level 1 answers
+									game_over = -1
+									print(f"Game over: {self.level1_wrong_answers} incorrect Level 1 answers")
 						# Don't reset or unpause here - let QuestionUI handle the delay
 						# The game will automatically unpause when QuestionUI is done
 
@@ -1228,6 +2030,16 @@ class Game():
 				# After handling question UI events and update, check for timeout game over
 				if self.question_ui and self.question_ui.active and self.question_ui.question_answered and self.question_ui.show_feedback and self.question_ui.feedback_message.startswith("⏰ Time's up!"):
 					game_over = -1
+
+			# Update cursor blink timer
+			if in_menu:
+				self.cursor_blink_timer += 1
+				
+				# Update duplicate message timer
+				if self.show_duplicate_message:
+					self.duplicate_message_timer -= 1
+					if self.duplicate_message_timer <= 0:
+						self.show_duplicate_message = False
 
 			# At the end of the frame, blit the game_surface centered on the screen
 			surf_x = (display_width - GAME_SURFACE_WIDTH) // 2
@@ -1267,10 +2079,11 @@ def draw_platforms_with_labels(surface, font, draw_labels_only=False):
         label = get_level_label(idx)
         if label:
             color1, color2 = level_colors[label]
-            label_font = font
+            # Use a smaller font size for narrower labels
+            label_font = pygame.font.SysFont('comicsansms', int(14 * GameConfig.SCALE_FACTOR))
             label_text = label_font.render(label, True, (255, 255, 255))
             padding_x = int(6 * GameConfig.SCALE_FACTOR)
-            padding_y = int(2 * GameConfig.SCALE_FACTOR)
+            padding_y = int(2* GameConfig.SCALE_FACTOR)
             label_width = label_text.get_width() + 2 * padding_x
             label_height = label_text.get_height() + 2 * padding_y
             label_x = platform.rect.centerx - label_width // 2
@@ -1290,6 +2103,16 @@ def draw_platforms_with_labels(surface, font, draw_labels_only=False):
 # Start the game
 try:
 	game = Game()
+	# Save player details when game exits if not already saved
+	if hasattr(game, 'username') and hasattr(game, 'player_details_saved') and not game.player_details_saved:
+		rank = None
+		if points >= 30:
+			rank = 'Legend'
+		elif points >= 24:
+			rank = 'Gladiator'
+		elif points >= 20:
+			rank = 'Warrior'
+		game.save_player_details(game.username, points, rank, "Game Exited")
 	pygame.quit()
 except Exception as e:
 	print(f"Fatal error: {str(e)}")

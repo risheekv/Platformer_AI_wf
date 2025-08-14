@@ -75,7 +75,6 @@ Player = {
 
 UI = {
 	"play" : os.path.join(PROJECT_ROOT, "sprites", "UI", "play_button.png"),
-	"quit" : os.path.join(PROJECT_ROOT, "sprites", "UI", "quit_button.png"),
 	"continue" : os.path.join(PROJECT_ROOT, "sprites", "UI", "continue_button.png"),
 	"resume" : os.path.join(PROJECT_ROOT, "sprites", "UI", "resume_button.png"),
 }

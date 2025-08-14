@@ -96,6 +96,7 @@ class QuestionUI:
         self.question_timer = 0
         self.question_timer_max = GameConfig.QUESTION_TIMER_SECONDS
         self.question_timer_active = False
+        self.question_timer_paused = False  # New variable to track if timer is paused
     
     def create_gradient_surface(self, width, height, start_color, end_color, angle=0):
         surface = pygame.Surface((width, height))
@@ -169,6 +170,7 @@ class QuestionUI:
         self.question_box_scale = 0.92
         self.question_timer = self.question_timer_max * 60  # 60 FPS
         self.question_timer_active = True
+        self.question_timer_paused = False  # Reset pause state when starting new question
     
     def handle_events(self, event, offset=(0, 0)):
         # Adjust event.pos for offset if it's a mouse event
@@ -185,6 +187,7 @@ class QuestionUI:
                     self.ai_answer = None
                     self.ai_loading = False
                     self.ai_error = None
+                    self.question_timer_paused = False  # Resume the question timer when going back from AI popup
                     return None
             return None
         if self.showing_hint_popup:
@@ -192,6 +195,7 @@ class QuestionUI:
                 if self.back_button.rect.collidepoint(adj_event.pos):
                     self.showing_hint_popup = False
                     self.hint_clicked = False
+                    self.question_timer_paused = False  # Resume the question timer when going back from hint popup
                     return None
             return None
         if not self.active or self.question_answered:
@@ -223,6 +227,7 @@ class QuestionUI:
                 if self.hint_button.rect.collidepoint(adj_event.pos):
                     self.showing_hint_popup = True
                     self.hint_clicked = True
+                    self.question_timer_paused = True  # Pause the question timer when Hint is clicked
                     return None
 
             # Check if Ask AI button is available and clicked
@@ -235,6 +240,7 @@ class QuestionUI:
                 self.ai_answer = None
                 self.ai_error = None
                 self.showing_ai_popup = True
+                self.question_timer_paused = True  # Pause the question timer when Ask AI is clicked
                 print("Ask AI button clicked, querying LLM...")
                 def fetch_ai_answer():
                     try:
@@ -332,6 +338,12 @@ class QuestionUI:
         self.ask_ai_clicked = False
         self.current_level = ""  # Reset current level
         self.option_rects = []  # Reset option rects each frame
+        self.question_timer_paused = False  # Reset pause state
+    
+    def reset_question_pool(self):
+        """Reset the question pool to allow all questions to be asked again"""
+        self.asked_questions = set()
+        self.reset_available_questions()
     
     def wrap_text(self, text, font, max_width):
         """Wrap text to fit within max_width"""
@@ -443,7 +455,7 @@ class QuestionUI:
 
     def update(self):
         # Call this once per frame from the main game loop
-        if self.active and self.question_timer_active and not self.question_answered:
+        if self.active and self.question_timer_active and not self.question_answered and not self.question_timer_paused:
             if self.question_timer > 0:
                 self.question_timer -= 1
             else:
@@ -562,19 +574,38 @@ class QuestionUI:
         
         # Draw options with color feedback
         button_width = int(600 * GameConfig.SCALE_FACTOR * scale)
-        button_height = int(50 * GameConfig.SCALE_FACTOR * scale)
+        base_button_height = int(50 * GameConfig.SCALE_FACTOR * scale)
         spacing = int(20 * GameConfig.SCALE_FACTOR * scale)
         
         self.option_rects = []  # Reset option rects each frame
-        for i, option in enumerate(self.current_question["options"]):
-            # Wrap option text
+        
+        # First pass: calculate all button heights and total height needed
+        button_heights = []
+        total_height_needed = 0
+        for option in self.current_question["options"]:
             option_lines = self.wrap_text(option, self.font, button_width - int(40 * GameConfig.SCALE_FACTOR * scale))
             option_height = len(option_lines) * int(self.font.get_height() * scale) + int(20 * GameConfig.SCALE_FACTOR * scale)
-            button_height = max(int(50 * GameConfig.SCALE_FACTOR * scale), option_height)
+            button_height = max(base_button_height, option_height)
+            button_heights.append(button_height)
+            total_height_needed += button_height + spacing
+        
+        # Remove extra spacing from last button
+        if button_heights:
+            total_height_needed -= spacing
+        
+        # Calculate starting position to center all options
+        start_y = self.screen.get_height() // 2 - total_height_needed // 2
+        
+        for i, option in enumerate(self.current_question["options"]):
+            # Use pre-calculated button height
+            button_height = button_heights[i]
             
-            # Calculate button position
+            # Calculate button position using cumulative height
             button_x = (self.screen.get_width() - button_width) // 2
-            button_y = self.screen.get_height() // 2 - int(50 * GameConfig.SCALE_FACTOR * scale) + i * (button_height + spacing)
+            if i == 0:
+                button_y = start_y
+            else:
+                button_y = start_y + sum(button_heights[:i]) + i * spacing
             
             # Determine button colors based on selection state
             if self.question_answered and self.show_feedback:
@@ -610,6 +641,9 @@ class QuestionUI:
             # Store the actual rect for this option
             self.option_rects.append(pygame.Rect(button_x, button_y, button_width, button_height))
 
+            # Recalculate option lines for this specific option
+            option_lines = self.wrap_text(option, self.font, button_width - int(40 * GameConfig.SCALE_FACTOR * scale))
+            
             # Center-align wrapped option text vertically and horizontally
             total_text_height = len(option_lines) * int(self.font.get_height() * scale)
             text_start_y = button_y + (button_height - total_text_height) // 2
@@ -647,7 +681,10 @@ class QuestionUI:
         if self.active and self.question_timer_active and not self.question_answered:
             timer_font = pygame.font.SysFont('comicsansms', int(32 * GameConfig.SCALE_FACTOR))
             seconds_left = max(0, int(self.question_timer // 60))
-            timer_text = timer_font.render(f"Time Left: {seconds_left}s", True, (255, 100, 100))
+            if self.question_timer_paused:
+                timer_text = timer_font.render(f"Time Left: {seconds_left}s (PAUSED)", True, (255, 255, 100))  # Yellow for paused
+            else:
+                timer_text = timer_font.render(f"Time Left: {seconds_left}s", True, (255, 100, 100))  # Red for running
             timer_rect = timer_text.get_rect(center=(self.screen.get_width() // 2, scaled_y - int(40 * GameConfig.SCALE_FACTOR)))
             self.screen.blit(timer_text, timer_rect)
 
